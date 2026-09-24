@@ -1,0 +1,27 @@
+# Build
+target/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+
+# SO
+Thumbs.db
+desktop.ini
+
+# Documentos sensíveis (LGPD): nunca versionar PDFs/imagens, exceto fixtures de teste
+*.pdf
+*.jpg
+*.jpeg
+*.png
+!src/test/resources/**/*.pdf
+!src/test/resources/**/*.jpg
+!src/test/resources/**/*.jpeg
+!src/test/resources/**/*.png
+
+# Logs
+*.log
