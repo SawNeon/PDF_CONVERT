@@ -18,10 +18,18 @@ desktop.ini
 *.jpg
 *.jpeg
 *.png
+*.gif
+*.bmp
+*.tif
+*.tiff
 !src/test/resources/**/*.pdf
 !src/test/resources/**/*.jpg
 !src/test/resources/**/*.jpeg
 !src/test/resources/**/*.png
+!src/test/resources/**/*.gif
+!src/test/resources/**/*.bmp
+!src/test/resources/**/*.tif
+!src/test/resources/**/*.tiff
 
 # Logs
 *.log
