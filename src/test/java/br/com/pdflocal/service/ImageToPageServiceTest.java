@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.pdflocal.model.PageSize;
 import br.com.pdflocal.service.ImageToPageService.Layout;
+import br.com.pdflocal.testsupport.TempDirCleanup;
 import br.com.pdflocal.testsupport.TestFiles;
 import br.com.pdflocal.util.CorruptFileException;
 import br.com.pdflocal.util.UnsupportedFileException;
@@ -19,11 +20,13 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+@ExtendWith(TempDirCleanup.class)
 class ImageToPageServiceTest {
 
     private static final double DELTA = 0.01;

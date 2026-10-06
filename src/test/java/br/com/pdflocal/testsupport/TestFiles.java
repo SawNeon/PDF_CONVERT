@@ -20,6 +20,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
+import org.apache.pdfbox.pdmodel.interactive.digitalsignature.PDSignature;
 import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
@@ -63,6 +64,19 @@ public final class TestFiles {
             StandardProtectionPolicy policy = new StandardProtectionPolicy(password, password, new AccessPermission());
             policy.setEncryptionKeyLength(128);
             document.protect(policy);
+            document.save(file.toFile());
+        }
+        return file;
+    }
+
+    public static Path signedPdf(Path directory, String name, String... pageLabels) throws IOException {
+        Path file = pdf(directory, name, pageLabels);
+        try (PDDocument document = Loader.loadPDF(Files.readAllBytes(file))) {
+            PDSignature signature = new PDSignature();
+            signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
+            signature.setSubFilter(PDSignature.SUBFILTER_ADBE_PKCS7_DETACHED);
+            signature.setName("Test signer");
+            document.addSignature(signature);
             document.save(file.toFile());
         }
         return file;

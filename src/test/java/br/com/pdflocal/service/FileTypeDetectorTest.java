@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import br.com.pdflocal.model.FileType;
+import br.com.pdflocal.testsupport.TempDirCleanup;
 import br.com.pdflocal.testsupport.TestFiles;
 import br.com.pdflocal.util.CorruptFileException;
 import br.com.pdflocal.util.PdfLocalException;
@@ -12,10 +13,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+@ExtendWith(TempDirCleanup.class)
 class FileTypeDetectorTest {
 
     private final FileTypeDetector detector = new FileTypeDetector();
