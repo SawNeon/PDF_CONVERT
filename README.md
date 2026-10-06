@@ -38,6 +38,15 @@ Os testes geram todos os PDFs e imagens por código. Nenhum documento real é us
 - **Salvar PDF** grava o resultado. É possível cancelar durante o salvamento.
 - O botão de tema alterna entre claro e escuro, e a escolha é lembrada.
 
+## Identidade visual
+
+- **Cores:** tudo está em `src/main/resources/pdflocal.css`. A paleta fica no começo do arquivo (tema claro em `.root` e tema escuro em `.root.dark`), e o resto do CSS usa essas variáveis.
+- **Textos de identificação:** nome do app, descrição e "Desenvolvido por" ficam em `src/main/resources/messages.properties` (`app.title`, `app.about.title`, `app.developer`, `app.about.version`). O arquivo deve ser salvo em **UTF-8**; o `.editorconfig` e um teste cuidam disso.
+- **Imagens:** ficam em `src/main/resources/images`, todas PNG com fundo transparente: `logo-green` e `logo-white` (tela "Sobre"), `symbol-green` e `symbol-white` (toolbar), `watermark-light` e `watermark-dark` (fundo da grade, já com baixa opacidade) e `app-icon-32/64/256` (ícone da janela). A versão branca é usada no tema escuro.
+- **Ícone do executável:** `packaging/app-icon.ico` (16 a 256 px), usado pelo `jpackage` no `.exe` e no instalador.
+
+Para trocar a logo, substitua os PNGs mantendo os nomes e as proporções (o teste `BrandAssetsTest` confere que os arquivos existem, são PNG e têm transparência) e gere o `.ico` de novo.
+
 ## Como gerar o pacote para Windows
 
 Requisitos: JDK 21 (com `jlink` e `jpackage`) e Maven no PATH, ou informados ao script.
