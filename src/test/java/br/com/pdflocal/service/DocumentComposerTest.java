@@ -8,14 +8,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import br.com.pdflocal.model.PageItem;
 import br.com.pdflocal.model.PageSize;
 import br.com.pdflocal.model.SourceDocument;
+import br.com.pdflocal.testsupport.TempDirCleanup;
 import br.com.pdflocal.testsupport.TestFiles;
 import br.com.pdflocal.util.PdfLocalException;
+import br.com.pdflocal.util.SaveCancelledException;
 import br.com.pdflocal.util.UnsupportedFileException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.pdfbox.Loader;
@@ -24,8 +32,10 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
+@ExtendWith(TempDirCleanup.class)
 class DocumentComposerTest {
 
     private static final double DELTA = 0.01;
@@ -273,7 +283,7 @@ class DocumentComposerTest {
         PdfLocalException error = assertThrows(PdfLocalException.class, () -> composer.compose(
                 List.of(), registry, PageSize.ORIGINAL, outputs.resolve("empty.pdf")));
 
-        assertEquals("Não há páginas para salvar.", error.getMessage());
+        assertEquals("Não há páginas para salvar. Adicione arquivos antes de salvar.", error.getMessage());
     }
 
     @Test
@@ -296,7 +306,7 @@ class DocumentComposerTest {
         PdfLocalException error = assertThrows(PdfLocalException.class, () -> composer.compose(
                 List.of(page(a, 0)), registry, PageSize.ORIGINAL, output));
 
-        assertTrue(error.getMessage().startsWith("Não foi possível salvar o PDF"));
+        assertEquals("A pasta escolhida para salvar não existe mais. Escolha outra pasta.", error.getMessage());
     }
 
     @Test
@@ -308,6 +318,124 @@ class DocumentComposerTest {
 
         assertFalse(registry.document(a.id()).getDocument().isClosed());
         assertEquals(List.of("A2"), TestFiles.pageTexts(outputs.resolve("second.pdf")));
+    }
+
+    @Test
+    void waitsForTheSourceLockBeforeReadingTheDocument() throws Exception {
+        SourceDocument a = registry.open(TestFiles.pdf(inputs, "a.pdf", "A1"));
+        Path output = outputs.resolve("locked.pdf");
+        ReentrantLock lock = registry.lock(a.id());
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+
+        lock.lock();
+        Future<?> saving = executor.submit(() -> {
+            composer.compose(List.of(page(a, 0)), registry, PageSize.ORIGINAL, output);
+            return null;
+        });
+        try {
+            assertThrows(TimeoutException.class, () -> saving.get(300, TimeUnit.MILLISECONDS));
+            assertFalse(Files.exists(output));
+        } finally {
+            lock.unlock();
+        }
+
+        saving.get(10, TimeUnit.SECONDS);
+        executor.shutdown();
+        assertEquals(List.of("A1"), TestFiles.pageTexts(output));
+    }
+
+    @Test
+    void accessDeniedIsReportedAsPermissionOrFileInUse() {
+        assertEquals("error.save.denied",
+                DocumentComposer.classify(new java.nio.file.AccessDeniedException("x"), 500_000_000L));
+    }
+
+    @Test
+    void ioErrorWithAlmostNoFreeSpaceIsReportedAsDiskFull() {
+        assertEquals("error.save.no-space", DocumentComposer.classify(new IOException("x"), 10_000L));
+    }
+
+    @Test
+    void otherIoErrorsKeepTheGenericMessage() {
+        assertEquals("error.save.failed", DocumentComposer.classify(new IOException("x"), 500_000_000L));
+        assertEquals("error.save.failed", DocumentComposer.classify(new IOException("x"), -1));
+        assertEquals("error.save.failed", DocumentComposer.classify(new IllegalStateException("x"), 10_000L));
+    }
+
+    @Test
+    void reportsProgressPageByPageUpToTheTotal() throws Exception {
+        SourceDocument a = registry.open(TestFiles.pdf(inputs, "a.pdf", "A1", "A2", "A3"));
+        List<String> progress = new java.util.ArrayList<>();
+
+        composer.compose(List.of(page(a, 0), page(a, 1), page(a, 2)), registry, PageSize.ORIGINAL,
+                outputs.resolve("progress.pdf"), listener(progress, () -> false));
+
+        assertEquals(List.of("1/3", "2/3", "3/3"), progress);
+    }
+
+    @Test
+    void cancellingInTheMiddleLeavesNothingBehind() throws Exception {
+        SourceDocument a = registry.open(TestFiles.pdf(inputs, "a.pdf", "A1", "A2", "A3", "A4"));
+        Path output = outputs.resolve("cancelled.pdf");
+        List<String> progress = new java.util.ArrayList<>();
+
+        assertThrows(SaveCancelledException.class, () -> composer.compose(
+                List.of(page(a, 0), page(a, 1), page(a, 2), page(a, 3)), registry, PageSize.ORIGINAL, output,
+                listener(progress, () -> progress.size() >= 2)));
+
+        assertEquals(List.of("1/4", "2/4"), progress);
+        assertFalse(Files.exists(output));
+        assertEquals(Set.of(), fileNames(outputs));
+    }
+
+    @Test
+    void cancellingKeepsThePreviousOutputIntact() throws Exception {
+        SourceDocument a = registry.open(TestFiles.pdf(inputs, "a.pdf", "A1", "A2"));
+        Path output = TestFiles.pdf(outputs, "result.pdf", "KEEP");
+        String hashBefore = TestFiles.sha256(output);
+
+        assertThrows(SaveCancelledException.class, () -> composer.compose(
+                List.of(page(a, 0), page(a, 1)), registry, PageSize.ORIGINAL, output, listener(new java.util.ArrayList<>(), () -> true)));
+
+        assertEquals(hashBefore, TestFiles.sha256(output));
+        assertEquals(Set.of("result.pdf"), fileNames(outputs));
+    }
+
+    @Test
+    void cancelledMessageIsUserFacing() throws Exception {
+        SourceDocument a = registry.open(TestFiles.pdf(inputs, "a.pdf", "A1"));
+
+        SaveCancelledException error = assertThrows(SaveCancelledException.class, () -> composer.compose(
+                List.of(page(a, 0)), registry, PageSize.ORIGINAL, outputs.resolve("x.pdf"),
+                listener(new java.util.ArrayList<>(), () -> true)));
+
+        assertEquals("Salvamento cancelado.", error.getMessage());
+    }
+
+    @Test
+    void sourcesStayUsableAfterACancelledSave() throws Exception {
+        SourceDocument a = registry.open(TestFiles.pdf(inputs, "a.pdf", "A1", "A2"));
+        assertThrows(SaveCancelledException.class, () -> composer.compose(
+                List.of(page(a, 0)), registry, PageSize.ORIGINAL, outputs.resolve("x.pdf"),
+                listener(new java.util.ArrayList<>(), () -> true)));
+
+        composer.compose(List.of(page(a, 1)), registry, PageSize.ORIGINAL, outputs.resolve("y.pdf"));
+
+        assertEquals(List.of("A2"), TestFiles.pageTexts(outputs.resolve("y.pdf")));
+    }
+
+    private static SaveListener listener(List<String> progress, java.util.function.BooleanSupplier cancelled) {
+        return new SaveListener() {
+            @Override
+            public void onPage(int done, int total) {
+                progress.add(done + "/" + total);
+            }
+
+            @Override
+            public boolean isCancelled() {
+                return cancelled.getAsBoolean();
+            }
+        };
     }
 
     private static PageItem page(SourceDocument source, int index) {

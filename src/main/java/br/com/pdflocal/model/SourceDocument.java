@@ -4,7 +4,7 @@ import java.nio.file.Path;
 import java.util.Objects;
 import java.util.UUID;
 
-public record SourceDocument(UUID id, Path path, int pageCount) {
+public record SourceDocument(UUID id, Path path, int pageCount, boolean signed) {
 
     public SourceDocument {
         Objects.requireNonNull(id, "id");
