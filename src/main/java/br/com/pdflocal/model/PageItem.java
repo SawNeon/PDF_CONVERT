@@ -1,11 +1,13 @@
 package br.com.pdflocal.model;
 
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.UUID;
 
-public record PageItem(UUID sourceId, int pageIndex, Path imagePath, int rotation) {
+public record PageItem(UUID id, UUID sourceId, int pageIndex, Path imagePath, int rotation) {
 
     public PageItem {
+        Objects.requireNonNull(id, "id");
         if (rotation != 0 && rotation != 90 && rotation != 180 && rotation != 270) {
             throw new IllegalArgumentException("Invalid rotation: " + rotation);
         }
@@ -17,11 +19,11 @@ public record PageItem(UUID sourceId, int pageIndex, Path imagePath, int rotatio
     }
 
     public static PageItem pdfPage(UUID sourceId, int pageIndex) {
-        return new PageItem(sourceId, pageIndex, null, 0);
+        return new PageItem(UUID.randomUUID(), sourceId, pageIndex, null, 0);
     }
 
     public static PageItem image(Path imagePath) {
-        return new PageItem(null, 0, imagePath, 0);
+        return new PageItem(UUID.randomUUID(), null, 0, imagePath, 0);
     }
 
     public boolean isImage() {
@@ -32,6 +34,6 @@ public record PageItem(UUID sourceId, int pageIndex, Path imagePath, int rotatio
         if (degrees % 90 != 0) {
             throw new IllegalArgumentException("Rotation must be a multiple of 90: " + degrees);
         }
-        return new PageItem(sourceId, pageIndex, imagePath, Math.floorMod(rotation + degrees, 360));
+        return new PageItem(id, sourceId, pageIndex, imagePath, Math.floorMod(rotation + degrees, 360));
     }
 }

@@ -2,6 +2,7 @@ package br.com.pdflocal.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -33,14 +34,37 @@ class PageItemTest {
     @ParameterizedTest
     @ValueSource(ints = {-90, 45, 91, 360, 450})
     void rejectsInvalidRotation(int rotation) {
-        assertThrows(IllegalArgumentException.class, () -> new PageItem(sourceId, 0, null, rotation));
+        assertThrows(IllegalArgumentException.class,
+                () -> new PageItem(UUID.randomUUID(), sourceId, 0, null, rotation));
     }
 
     @Test
     void rejectsItemThatIsNeitherPdfPageNorImage() {
-        assertThrows(IllegalArgumentException.class, () -> new PageItem(null, 0, null, 0));
-        assertThrows(IllegalArgumentException.class, () -> new PageItem(sourceId, 0, Path.of("a.png"), 0));
-        assertThrows(IllegalArgumentException.class, () -> new PageItem(sourceId, -1, null, 0));
+        UUID id = UUID.randomUUID();
+
+        assertThrows(IllegalArgumentException.class, () -> new PageItem(id, null, 0, null, 0));
+        assertThrows(IllegalArgumentException.class, () -> new PageItem(id, sourceId, 0, Path.of("a.png"), 0));
+        assertThrows(IllegalArgumentException.class, () -> new PageItem(id, sourceId, -1, null, 0));
+    }
+
+    @Test
+    void rejectsMissingId() {
+        assertThrows(NullPointerException.class, () -> new PageItem(null, sourceId, 0, null, 0));
+    }
+
+    @Test
+    void everyItemGetsItsOwnId() {
+        assertNotEquals(PageItem.pdfPage(sourceId, 0).id(), PageItem.pdfPage(sourceId, 0).id());
+        assertNotEquals(PageItem.image(Path.of("a.png")), PageItem.image(Path.of("a.png")));
+    }
+
+    @Test
+    void rotatingKeepsTheId() {
+        PageItem item = PageItem.pdfPage(sourceId, 2);
+
+        assertEquals(item.id(), item.rotatedBy(90).id());
+        assertEquals(item.sourceId(), item.rotatedBy(90).sourceId());
+        assertEquals(item.pageIndex(), item.rotatedBy(90).pageIndex());
     }
 
     @Test
