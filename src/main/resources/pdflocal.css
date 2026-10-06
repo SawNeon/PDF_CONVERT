@@ -1,12 +1,151 @@
+.root {
+    -pl-green: #00995d;
+    -pl-lime: #b1d34b;
+    -pl-forest: #004e4c;
+    -pl-orange: #f47920;
+    -pl-rose: #d2a494;
+    -pl-blush: #f1cdcd;
+    -pl-sand: #ece3d9;
+    -pl-butter: #ffe596;
+    -pl-mint: #cde3bb;
+    -pl-sky: #a4d8de;
+
+    -pl-accent: #004e4c;
+    -pl-accent-hover: #1e6361;
+    -pl-on-accent: #ffffff;
+    -pl-highlight: #00995d;
+    -pl-card: #ffffff;
+    -pl-thumb-bg: #ece3d9;
+    -pl-toolbar-line: #00995d;
+
+    -color-base-0: #f6f1ea;
+    -color-base-1: #ece3d9;
+    -color-base-2: #ddd0c2;
+    -color-base-3: #c4b6a6;
+    -color-base-4: #a09384;
+    -color-base-5: #7b7066;
+    -color-base-6: #5a524b;
+    -color-base-7: #433d38;
+    -color-base-8: #2d2926;
+    -color-base-9: #1c1917;
+
+    -color-accent-0: #e5f4ed;
+    -color-accent-1: #cde3bb;
+    -color-accent-2: #99d6be;
+    -color-accent-3: #66c29e;
+    -color-accent-4: #19a868;
+    -color-accent-5: #00995d;
+    -color-accent-6: #004e4c;
+    -color-accent-7: #00403f;
+    -color-accent-8: #003332;
+    -color-accent-9: #002726;
+
+    -color-fg-default: #004e4c;
+    -color-fg-muted: #2e6b69;
+    -color-fg-subtle: #5f8e8c;
+    -color-fg-emphasis: #ffffff;
+
+    -color-bg-default: #ece3d9;
+    -color-bg-overlay: #f6f1ea;
+    -color-bg-subtle: #f6f1ea;
+    -color-bg-inset: #e2d6c8;
+
+    -color-border-default: #cbbcab;
+    -color-border-muted: #d6c9ba;
+    -color-border-subtle: #ddd0c2;
+
+    -color-neutral-emphasis: #7b7066;
+    -color-neutral-muted: rgba(196, 182, 166, 0.35);
+    -color-neutral-subtle: rgba(236, 227, 217, 0.6);
+
+    -color-accent-fg: #004e4c;
+    -color-accent-emphasis: #004e4c;
+    -color-accent-muted: rgba(0, 153, 93, 0.35);
+    -color-accent-subtle: #cde3bb;
+
+    -color-success-emphasis: #00995d;
+    -color-danger-fg: #b4232b;
+    -color-danger-emphasis: #b4232b;
+    -color-danger-muted: rgba(210, 164, 148, 0.5);
+    -color-danger-subtle: #f1cdcd;
+}
+
+.root.dark {
+    -pl-accent: #b1d34b;
+    -pl-accent-hover: #c1dc6f;
+    -pl-on-accent: #004e4c;
+    -pl-highlight: #b1d34b;
+    -pl-card: #123836;
+    -pl-thumb-bg: #082120;
+    -pl-toolbar-line: #b1d34b;
+
+    -color-base-0: #f3ede4;
+    -color-base-1: #ece3d9;
+    -color-base-2: #cdd9d3;
+    -color-base-3: #9fb7b0;
+    -color-base-4: #6f918a;
+    -color-base-5: #3f6b66;
+    -color-base-6: #24504d;
+    -color-base-7: #163f3c;
+    -color-base-8: #0f3230;
+    -color-base-9: #082120;
+
+    -color-accent-0: #eef5d4;
+    -color-accent-1: #dcebaa;
+    -color-accent-2: #c1dc6f;
+    -color-accent-3: #b1d34b;
+    -color-accent-4: #9bbf3a;
+    -color-accent-5: #8fb52f;
+    -color-accent-6: #c1dc6f;
+    -color-accent-7: #a3c23e;
+    -color-accent-8: #6f9524;
+    -color-accent-9: #4f6b1a;
+
+    -color-fg-default: #ece3d9;
+    -color-fg-muted: #b9cfc8;
+    -color-fg-subtle: #8aa9a2;
+    -color-fg-emphasis: #004e4c;
+
+    -color-bg-default: #0c2a29;
+    -color-bg-overlay: #123836;
+    -color-bg-subtle: #123836;
+    -color-bg-inset: #082120;
+
+    -color-border-default: #24504d;
+    -color-border-muted: #1b4340;
+    -color-border-subtle: #163b38;
+
+    -color-neutral-emphasis: #6f918a;
+    -color-neutral-muted: rgba(111, 145, 138, 0.4);
+    -color-neutral-subtle: rgba(111, 145, 138, 0.12);
+
+    -color-accent-fg: #b1d34b;
+    -color-accent-emphasis: #b1d34b;
+    -color-accent-muted: rgba(177, 211, 75, 0.4);
+    -color-accent-subtle: rgba(177, 211, 75, 0.18);
+
+    -color-success-emphasis: #00995d;
+    -color-danger-fg: #f1a3a3;
+    -color-danger-emphasis: #d2706f;
+    -color-danger-muted: rgba(241, 163, 163, 0.4);
+    -color-danger-subtle: rgba(241, 205, 205, 0.15);
+}
+
+.tool-bar {
+    -fx-background-color: -color-bg-subtle;
+    -fx-border-color: transparent transparent -pl-toolbar-line transparent;
+    -fx-border-width: 0 0 3 0;
+}
+
 .tool-bar .button.save-button {
-    -fx-background-color: -color-accent-emphasis;
-    -fx-text-fill: white;
+    -fx-background-color: -pl-accent;
+    -fx-text-fill: -pl-on-accent;
     -fx-font-weight: bold;
     -fx-padding: 6 18 6 18;
 }
 
 .tool-bar .button.save-button:hover {
-    -fx-background-color: -color-accent-fg;
+    -fx-background-color: -pl-accent-hover;
 }
 
 .tool-bar .button.save-button:disabled {
@@ -15,12 +154,23 @@
 
 .page-grid {
     -fx-background-color: -color-bg-default;
+    -fx-background-image: url("images/watermark-light.png");
+    -fx-background-repeat: no-repeat;
+    -fx-background-position: center center;
     -fx-background-insets: 0;
     -fx-padding: 0;
 }
 
+.root.dark .page-grid {
+    -fx-background-image: url("images/watermark-dark.png");
+}
+
+.page-grid > .viewport {
+    -fx-background-color: transparent;
+}
+
 .page-card {
-    -fx-background-color: -color-bg-subtle;
+    -fx-background-color: -pl-card;
     -fx-background-radius: 8;
     -fx-border-color: -color-border-default;
     -fx-border-radius: 8;
@@ -29,7 +179,7 @@
 }
 
 .page-card:hover {
-    -fx-border-color: -color-accent-emphasis;
+    -fx-border-color: -pl-highlight;
 }
 
 .page-card.dragging {
@@ -37,13 +187,13 @@
 }
 
 .thumbnail-box {
-    -fx-background-color: -color-bg-inset;
+    -fx-background-color: -pl-thumb-bg;
     -fx-background-radius: 4;
 }
 
 .page-badge {
-    -fx-background-color: -color-accent-emphasis;
-    -fx-text-fill: white;
+    -fx-background-color: -pl-accent;
+    -fx-text-fill: -pl-on-accent;
     -fx-background-radius: 10;
     -fx-padding: 1 8 1 8;
     -fx-font-size: 11px;
@@ -62,7 +212,7 @@
 }
 
 .drop-indicator {
-    -fx-fill: -color-accent-emphasis;
+    -fx-fill: -pl-orange;
 }
 
 .empty-hint {
@@ -71,14 +221,19 @@
 }
 
 .status-bar {
+    -fx-background-color: -color-bg-subtle;
     -fx-padding: 6 12 6 12;
     -fx-spacing: 12;
     -fx-alignment: center-left;
     -fx-border-color: -color-border-default transparent transparent transparent;
 }
 
+.status-bar .progress-bar > .bar {
+    -fx-background-color: -pl-highlight;
+}
+
 .page-card:selected {
-    -fx-border-color: -color-accent-emphasis;
+    -fx-border-color: -pl-highlight;
     -fx-border-width: 2;
     -fx-background-color: -color-accent-subtle;
 }
@@ -88,7 +243,7 @@
 }
 
 .card-action {
-    -fx-background-color: -color-bg-default;
+    -fx-background-color: -pl-card;
     -fx-background-radius: 6;
     -fx-border-color: -color-border-default;
     -fx-border-radius: 6;
@@ -142,4 +297,54 @@
 
 .preview-scroll > .viewport {
     -fx-background-color: -color-bg-inset;
+}
+
+.brand-mark {
+    -fx-background-image: url("images/symbol-green.png");
+    -fx-background-repeat: no-repeat;
+    -fx-background-position: center center;
+    -fx-background-size: contain;
+    -fx-cursor: hand;
+}
+
+.root.dark .brand-mark {
+    -fx-background-image: url("images/symbol-white.png");
+}
+
+.about-logo {
+    -fx-background-image: url("images/logo-green.png");
+    -fx-background-repeat: no-repeat;
+    -fx-background-position: center center;
+    -fx-background-size: contain;
+}
+
+.root.dark .about-logo {
+    -fx-background-image: url("images/logo-white.png");
+}
+
+.about-name {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -color-fg-default;
+}
+
+.about-description {
+    -fx-font-size: 13px;
+    -fx-text-fill: -color-fg-default;
+}
+
+.about-detail {
+    -fx-font-size: 12px;
+    -fx-text-fill: -color-fg-muted;
+}
+
+.developer-credit {
+    -fx-font-size: 11px;
+    -fx-text-fill: -color-fg-muted;
+    -fx-cursor: hand;
+}
+
+.developer-credit:hover {
+    -fx-text-fill: -color-fg-default;
+    -fx-underline: true;
 }

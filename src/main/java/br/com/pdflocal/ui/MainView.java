@@ -19,6 +19,7 @@ import javafx.collections.ListChangeListener;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.Tooltip;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -41,6 +42,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
     private final Label status = new Label();
     private final ProgressBar progress = new ProgressBar(ProgressBar.INDETERMINATE_PROGRESS);
     private final Button cancelButton = new Button(Messages.get("dialog.cancel"));
+    private final Label developerCredit = new Label(Messages.get("app.developer"));
 
     private DocumentSession.SaveOperation saving;
     private boolean cancelRequested;
@@ -52,15 +54,20 @@ public final class MainView extends BorderPane implements AutoCloseable {
     public MainView(Stage stage, AppSettings settings) {
         this.stage = stage;
         this.settings = settings;
+        Theme theme = Theme.parse(settings.theme());
+        Appearance.apply(this, theme);
         this.toolbar = new Toolbar(this::addFiles, this::clear, this::save, grid::setViewMode,
-                this::toggleTheme, Theme.parse(settings.theme()));
+                this::toggleTheme, theme, this::showAbout);
 
         progress.setPrefWidth(160);
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         cancelButton.setVisible(false);
         cancelButton.setOnAction(event -> cancelSave());
-        HBox statusBar = new HBox(status, spacer, progress, cancelButton);
+        developerCredit.getStyleClass().add("developer-credit");
+        developerCredit.setTooltip(new Tooltip(Messages.get("toolbar.about.tooltip")));
+        developerCredit.setOnMouseClicked(event -> showAbout());
+        HBox statusBar = new HBox(status, spacer, progress, cancelButton, developerCredit);
         statusBar.getStyleClass().add("status-bar");
 
         setTop(toolbar);
@@ -96,9 +103,14 @@ public final class MainView extends BorderPane implements AutoCloseable {
         session.close();
     }
 
+    private void showAbout() {
+        Dialogs.showAbout(stage);
+    }
+
     private void toggleTheme() {
         Theme next = Theme.parse(settings.theme()).toggled();
         Application.setUserAgentStylesheet(next.userAgentStylesheet());
+        Appearance.apply(this, next);
         settings.setTheme(next.name());
         toolbar.setTheme(next);
     }

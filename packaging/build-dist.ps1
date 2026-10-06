@@ -125,6 +125,11 @@ $commonArguments = @(
     '--java-options', '-Xmx1g'
 )
 
+$iconPath = Join-Path $PSScriptRoot 'app-icon.ico'
+if (Test-Path $iconPath) {
+    $commonArguments += @('--icon', $iconPath)
+}
+
 Step 'Gerando o app-image portatil (jpackage)'
 if (Test-Path $appImageDir) {
     Remove-Item $appImageDir -Recurse -Force

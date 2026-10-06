@@ -13,12 +13,16 @@ import javafx.scene.control.Separator;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.ToolBar;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.util.StringConverter;
 
 final class Toolbar extends ToolBar {
+
+    private static final double BRAND_WIDTH = 40;
+    private static final double BRAND_HEIGHT = 26;
 
     private final Button add = new Button(Messages.get("toolbar.add"));
     private final Button clear = new Button(Messages.get("toolbar.clear"));
@@ -29,7 +33,7 @@ final class Toolbar extends ToolBar {
     private final ChoiceBox<PageSize> pageSize = new ChoiceBox<>(FXCollections.observableArrayList(PageSize.values()));
 
     Toolbar(Runnable onAdd, Runnable onClear, Runnable onSave, Consumer<ViewMode> onViewMode,
-            Runnable onToggleTheme, Theme theme) {
+            Runnable onToggleTheme, Theme theme, Runnable onAbout) {
         add.setOnAction(event -> onAdd.run());
         clear.setOnAction(event -> onClear.run());
         save.setOnAction(event -> onSave.run());
@@ -64,9 +68,17 @@ final class Toolbar extends ToolBar {
         });
         pageSize.setValue(PageSize.A4);
 
+        Region brand = new Region();
+        brand.getStyleClass().add("brand-mark");
+        brand.setMinSize(BRAND_WIDTH, BRAND_HEIGHT);
+        brand.setPrefSize(BRAND_WIDTH, BRAND_HEIGHT);
+        brand.setMaxSize(BRAND_WIDTH, BRAND_HEIGHT);
+        Tooltip.install(brand, new Tooltip(Messages.get("toolbar.about.tooltip")));
+        brand.setOnMouseClicked(event -> onAbout.run());
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        getItems().addAll(add, clear, new Separator(), byFile, byPage, new Separator(),
+        getItems().addAll(brand, add, clear, new Separator(), byFile, byPage, new Separator(),
                 new Label(Messages.get("toolbar.pagesize.label")), pageSize, spacer, themeButton, save);
         setState(false, false);
     }

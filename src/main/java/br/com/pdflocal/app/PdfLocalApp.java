@@ -1,5 +1,6 @@
 package br.com.pdflocal.app;
 
+import br.com.pdflocal.ui.AppIcons;
 import br.com.pdflocal.ui.MainView;
 import br.com.pdflocal.ui.Theme;
 import br.com.pdflocal.util.AppSettings;
@@ -8,7 +9,6 @@ import br.com.pdflocal.util.Messages;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.logging.Handler;
 import javafx.application.Application;
@@ -33,9 +33,9 @@ public class PdfLocalApp extends Application {
 
         view = new MainView(stage, settings);
         Scene scene = new Scene(view, INITIAL_WIDTH, INITIAL_HEIGHT);
-        scene.getStylesheets().add(Objects.requireNonNull(getClass().getResource("/pdflocal.css")).toExternalForm());
 
         stage.setTitle(Messages.get("app.title"));
+        AppIcons.apply(stage);
         stage.setMinWidth(MIN_WIDTH);
         stage.setMinHeight(MIN_HEIGHT);
         stage.setScene(scene);

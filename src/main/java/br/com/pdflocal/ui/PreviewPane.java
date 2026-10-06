@@ -91,8 +91,9 @@ final class PreviewPane extends BorderPane {
         Stage stage = new Stage();
         PreviewPane pane = new PreviewPane(session, List.copyOf(items), startIndex, stage::close);
         Scene scene = new Scene(pane, INITIAL_WIDTH, INITIAL_HEIGHT);
-        scene.getStylesheets().add(PreviewPane.class.getResource("/pdflocal.css").toExternalForm());
+        Appearance.style(pane);
         scene.addEventFilter(KeyEvent.KEY_PRESSED, pane::onKey);
+        AppIcons.apply(stage);
         stage.titleProperty().bind(pane.title);
         stage.initOwner(owner);
         stage.initModality(Modality.WINDOW_MODAL);

@@ -1,6 +1,7 @@
 package br.com.pdflocal.ui;
 
 import br.com.pdflocal.service.ImportResult;
+import br.com.pdflocal.util.AppInfo;
 import br.com.pdflocal.util.Messages;
 import java.io.File;
 import java.nio.file.Files;
@@ -8,14 +9,21 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.Label;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
 final class Dialogs {
 
+    private static final double ABOUT_LOGO_WIDTH = 288;
+    private static final double ABOUT_LOGO_HEIGHT = 80;
     private static final int MAX_FAILURES_SHOWN = 8;
     private static final String DEFAULT_OUTPUT_NAME = "documento.pdf";
 
@@ -54,6 +62,7 @@ final class Dialogs {
         ButtonType cancel = new ButtonType(Messages.get("dialog.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION, Messages.get("dialog.clear.message"), confirm, cancel);
         alert.initOwner(owner);
+        Appearance.style(alert);
         alert.setTitle(Messages.get("dialog.clear.title"));
         alert.setHeaderText(null);
         return alert.showAndWait().filter(button -> button == confirm).isPresent();
@@ -64,14 +73,49 @@ final class Dialogs {
         ButtonType cancel = new ButtonType(Messages.get("dialog.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
         Alert alert = new Alert(Alert.AlertType.WARNING, Messages.get("dialog.signature.message"), proceed, cancel);
         alert.initOwner(owner);
+        Appearance.style(alert);
         alert.setTitle(Messages.get("dialog.signature.title"));
         alert.setHeaderText(null);
         return alert.showAndWait().filter(button -> button == proceed).isPresent();
     }
 
+    static void showAbout(Window owner) {
+        Region logo = new Region();
+        logo.getStyleClass().add("about-logo");
+        logo.setMinSize(ABOUT_LOGO_WIDTH, ABOUT_LOGO_HEIGHT);
+        logo.setPrefSize(ABOUT_LOGO_WIDTH, ABOUT_LOGO_HEIGHT);
+        logo.setMaxSize(ABOUT_LOGO_WIDTH, ABOUT_LOGO_HEIGHT);
+
+        Label name = new Label(Messages.get("app.title"));
+        name.getStyleClass().add("about-name");
+        Label description = new Label(Messages.get("app.about.title").strip());
+        description.getStyleClass().add("about-description");
+        description.setWrapText(true);
+        Label version = new Label(Messages.format("app.about.version", AppInfo.version()));
+        version.getStyleClass().add("about-detail");
+        Label developer = new Label(Messages.get("app.developer"));
+        developer.getStyleClass().add("about-detail");
+
+        VBox content = new VBox(10, logo, name, description, version, developer);
+        content.setAlignment(Pos.CENTER_LEFT);
+        content.setPadding(new Insets(16));
+        content.setPrefWidth(ABOUT_LOGO_WIDTH + 40);
+
+        ButtonType close = new ButtonType(Messages.get("dialog.about.close"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.NONE, "", close);
+        alert.initOwner(owner);
+        Appearance.style(alert);
+        alert.setTitle(Messages.get("dialog.about.window"));
+        alert.setHeaderText(null);
+        alert.setGraphic(null);
+        alert.getDialogPane().setContent(content);
+        alert.showAndWait();
+    }
+
     static void showError(Window owner, String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR, message);
         alert.initOwner(owner);
+        Appearance.style(alert);
         alert.setTitle(Messages.get("dialog.error.title"));
         alert.setHeaderText(null);
         alert.showAndWait();
@@ -87,6 +131,7 @@ final class Dialogs {
         }
         Alert alert = new Alert(Alert.AlertType.WARNING, lines);
         alert.initOwner(owner);
+        Appearance.style(alert);
         alert.setTitle(Messages.get("dialog.error.title"));
         alert.setHeaderText(Messages.get("dialog.failures.title"));
         alert.showAndWait();

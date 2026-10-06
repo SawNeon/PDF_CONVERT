@@ -30,6 +30,7 @@ desktop.ini
 !src/test/resources/**/*.bmp
 !src/test/resources/**/*.tif
 !src/test/resources/**/*.tiff
+!src/main/resources/images/*.png
 
 # Logs
 *.log
