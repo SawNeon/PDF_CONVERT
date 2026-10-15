@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$JavaHome = $env:JAVA_HOME,
-    [string]$Maven = 'mvn',
+    [string]$JavaHome = '',
+    [string]$Maven = '',
     [switch]$Msi,
     [switch]$SkipBuild
 )
@@ -31,9 +31,79 @@ function Invoke-Tool($path, [string[]]$arguments) {
     }
 }
 
-if (-not $JavaHome) {
-    Fail 'Defina JAVA_HOME para um JDK 21 ou passe -JavaHome.'
+function Get-JavaMajor([string]$jdkDirectory) {
+    $exe = Join-Path $jdkDirectory 'bin\java.exe'
+    if (-not (Test-Path $exe)) {
+        return 0
+    }
+    $line = (cmd /c "`"$exe`" -version 2>&1") | Select-Object -First 1
+    if ($line -match '"(\d+)') {
+        return [int]$Matches[1]
+    }
+    return 0
 }
+
+function Find-Jdk21 {
+    $candidates = @()
+    if ($env:JAVA_HOME) {
+        $candidates += $env:JAVA_HOME
+    }
+    $bases = @(
+        (Join-Path $env:ProgramFiles 'Eclipse Adoptium'),
+        (Join-Path $env:ProgramFiles 'Java'),
+        (Join-Path $env:ProgramFiles 'Microsoft'),
+        (Join-Path $env:ProgramFiles 'Zulu'),
+        (Join-Path $env:USERPROFILE '.jdks')
+    )
+    foreach ($base in $bases) {
+        if (Test-Path $base) {
+            $candidates += Get-ChildItem $base -Directory |
+                Where-Object { $_.Name -match '21' } |
+                Sort-Object Name -Descending |
+                ForEach-Object { $_.FullName }
+        }
+    }
+    foreach ($candidate in $candidates) {
+        if ((Test-Path (Join-Path $candidate 'bin\jpackage.exe')) -and (Get-JavaMajor $candidate) -eq 21) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Find-Maven {
+    $command = Get-Command 'mvn.cmd', 'mvn' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command) {
+        return $command.Source
+    }
+    $patterns = @(
+        (Join-Path $env:USERPROFILE '.m2\wrapper\dists\*\*\*\bin\mvn.cmd'),
+        (Join-Path $env:USERPROFILE '.m2\wrapper\dists\*\*\bin\mvn.cmd'),
+        (Join-Path $env:ProgramFiles 'JetBrains\*\plugins\maven\lib\maven3\bin\mvn.cmd')
+    )
+    foreach ($pattern in $patterns) {
+        $found = Get-ChildItem $pattern -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+        if ($found) {
+            return $found.FullName
+        }
+    }
+    return $null
+}
+
+if (-not $JavaHome) {
+    $JavaHome = Find-Jdk21
+    if (-not $JavaHome) {
+        Fail 'JDK 21 nao encontrado. Instale o JDK 21, defina JAVA_HOME ou passe -JavaHome.'
+    }
+}
+if (-not $Maven) {
+    $Maven = Find-Maven
+    if (-not $Maven) {
+        Fail 'Maven nao encontrado. Coloque o mvn no PATH ou passe -Maven.'
+    }
+}
+Write-Host "JDK:   $JavaHome"
+Write-Host "Maven: $Maven"
 $jlink = Join-Path $JavaHome 'bin\jlink.exe'
 $jpackage = Join-Path $JavaHome 'bin\jpackage.exe'
 $java = Join-Path $JavaHome 'bin\java.exe'
