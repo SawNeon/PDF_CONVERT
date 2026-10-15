@@ -19,4 +19,7 @@ public interface SaveListener {
 
     default void onCompress(int done, int total) {
     }
+
+    default void onTransform(int done, int total) {
+    }
 }

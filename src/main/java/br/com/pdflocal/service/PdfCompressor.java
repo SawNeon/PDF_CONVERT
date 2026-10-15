@@ -109,11 +109,7 @@ public final class PdfCompressor {
     }
 
     private static COSDictionary makeEditable(PDPage page) {
-        COSDictionary resources = new COSDictionary(page.getResources().getCOSObject());
-        COSDictionary xObjects = new COSDictionary(resources.getCOSDictionary(COSName.XOBJECT));
-        resources.setItem(COSName.XOBJECT, xObjects);
-        page.setResources(new PDResources(resources));
-        return xObjects;
+        return EditableResources.privateCopy(page).getCOSObject().getCOSDictionary(COSName.XOBJECT);
     }
 
     private static COSStream streamOf(PDImageXObject image) {
