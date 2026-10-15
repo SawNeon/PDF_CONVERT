@@ -42,11 +42,15 @@ final class Dialogs {
     }
 
     static Path chooseOutput(Window owner, Path initialDirectory) {
+        return chooseOutput(owner, initialDirectory, DEFAULT_OUTPUT_NAME);
+    }
+
+    static Path chooseOutput(Window owner, Path initialDirectory, String suggestedName) {
         FileChooser chooser = new FileChooser();
         chooser.setTitle(Messages.get("dialog.save.title"));
         chooser.getExtensionFilters().add(
                 new FileChooser.ExtensionFilter(Messages.get("dialog.save.filter"), "*.pdf"));
-        chooser.setInitialFileName(DEFAULT_OUTPUT_NAME);
+        chooser.setInitialFileName(suggestedName);
         applyInitialDirectory(chooser, initialDirectory);
         File file = chooser.showSaveDialog(owner);
         if (file == null) {

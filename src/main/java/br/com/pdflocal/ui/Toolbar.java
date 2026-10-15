@@ -4,12 +4,19 @@ import atlantafx.base.theme.Styles;
 import br.com.pdflocal.model.PageSize;
 import br.com.pdflocal.model.ViewMode;
 import br.com.pdflocal.util.Messages;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import javafx.collections.FXCollections;
 import javafx.scene.control.Button;
 import javafx.scene.control.ChoiceBox;
+import javafx.scene.control.CustomMenuItem;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuButton;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.Separator;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.ToolBar;
@@ -28,15 +35,18 @@ final class Toolbar extends ToolBar {
     private final Button clear = new Button(Messages.get("toolbar.clear"));
     private final Button save = new Button(Messages.get("toolbar.save"));
     private final Button themeButton = new Button();
+    private final MenuButton tools = new MenuButton(Messages.get("toolbar.tools"));
+    private final List<Map.Entry<MenuItem, Tool>> toolItems = new ArrayList<>();
     private final ToggleButton byFile = new ToggleButton(Messages.get("toolbar.view.file"));
     private final ToggleButton byPage = new ToggleButton(Messages.get("toolbar.view.page"));
     private final ChoiceBox<PageSize> pageSize = new ChoiceBox<>(FXCollections.observableArrayList(PageSize.values()));
 
-    Toolbar(Runnable onAdd, Runnable onClear, Runnable onSave, Consumer<ViewMode> onViewMode,
+    Toolbar(Runnable onAdd, Runnable onClear, Runnable onSave, List<Tool> toolList, Consumer<ViewMode> onViewMode,
             Runnable onToggleTheme, Theme theme, Runnable onAbout) {
         add.setOnAction(event -> onAdd.run());
         clear.setOnAction(event -> onClear.run());
         save.setOnAction(event -> onSave.run());
+        buildToolsMenu(toolList);
         themeButton.setOnAction(event -> onToggleTheme.run());
         setTheme(theme);
         save.getStyleClass().add("save-button");
@@ -79,8 +89,29 @@ final class Toolbar extends ToolBar {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         getItems().addAll(brand, add, clear, new Separator(), byFile, byPage, new Separator(),
-                new Label(Messages.get("toolbar.pagesize.label")), pageSize, spacer, themeButton, save);
+                new Label(Messages.get("toolbar.pagesize.label")), pageSize, spacer, themeButton, tools, save);
         setState(false, false);
+    }
+
+    private void buildToolsMenu(List<Tool> toolList) {
+        for (ToolGroup group : ToolGroup.values()) {
+            List<Tool> inGroup = toolList.stream().filter(tool -> tool.group() == group).toList();
+            if (inGroup.isEmpty()) {
+                continue;
+            }
+            if (!tools.getItems().isEmpty()) {
+                tools.getItems().add(new SeparatorMenuItem());
+            }
+            Label heading = new Label(Messages.get(group.messageKey()));
+            heading.getStyleClass().add("tool-heading");
+            tools.getItems().add(new CustomMenuItem(heading, false));
+            for (Tool tool : inGroup) {
+                MenuItem item = new MenuItem(Messages.get(tool.titleKey()));
+                item.setOnAction(event -> tool.action().run());
+                tools.getItems().add(item);
+                toolItems.add(Map.entry(item, tool));
+            }
+        }
     }
 
     void setTheme(Theme theme) {
@@ -95,6 +126,8 @@ final class Toolbar extends ToolBar {
         add.setDisable(busy);
         clear.setDisable(busy || !hasPages);
         save.setDisable(busy || !hasPages);
+        tools.setDisable(busy);
+        toolItems.forEach(entry -> entry.getKey().setDisable(entry.getValue().requiresPages() && !hasPages));
         byFile.setDisable(busy);
         byPage.setDisable(busy);
         pageSize.setDisable(busy);

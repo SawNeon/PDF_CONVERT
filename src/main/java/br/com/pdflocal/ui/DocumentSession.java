@@ -1,5 +1,6 @@
 package br.com.pdflocal.ui;
 
+import br.com.pdflocal.model.CompressionLevel;
 import br.com.pdflocal.model.PageEdits;
 import br.com.pdflocal.model.PageItem;
 import br.com.pdflocal.model.PageOrder;
@@ -7,12 +8,16 @@ import br.com.pdflocal.model.PageSize;
 import br.com.pdflocal.model.SourceDocument;
 import br.com.pdflocal.model.UndoHistory;
 import br.com.pdflocal.service.DocumentComposer;
+import br.com.pdflocal.service.ImageShare;
 import br.com.pdflocal.service.ImportResult;
 import br.com.pdflocal.service.ImportService;
 import br.com.pdflocal.service.SaveListener;
+import br.com.pdflocal.service.SaveResult;
 import br.com.pdflocal.service.SourceRegistry;
 import br.com.pdflocal.service.ThumbnailService;
 import br.com.pdflocal.util.PdfLocalException;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.HashSet;
@@ -111,14 +116,19 @@ final class DocumentSession implements AutoCloseable {
         return CompletableFuture.runAsync(() -> sourceIds.forEach(this::closeSource), background);
     }
 
-    record SaveOperation(CompletableFuture<Integer> result, Runnable cancel) {
+    record SaveOperation(CompletableFuture<SaveResult> result, Runnable cancel) {
     }
 
     CompletableFuture<Integer> save(Path output, PageSize imagePageSize) {
-        return startSave(output, imagePageSize, (done, total) -> { }).result();
+        return startSave(output, imagePageSize, (done, total) -> { }).result().thenApply(SaveResult::pages);
     }
 
     SaveOperation startSave(Path output, PageSize imagePageSize, BiConsumer<Integer, Integer> progress) {
+        return startSave(output, imagePageSize, CompressionLevel.NONE, progress, (done, total) -> { });
+    }
+
+    SaveOperation startSave(Path output, PageSize imagePageSize, CompressionLevel compression,
+                            BiConsumer<Integer, Integer> progress, BiConsumer<Integer, Integer> compressionProgress) {
         List<PageItem> snapshot = List.copyOf(items);
         AtomicBoolean cancelled = new AtomicBoolean();
         SaveListener listener = new SaveListener() {
@@ -128,19 +138,44 @@ final class DocumentSession implements AutoCloseable {
             }
 
             @Override
+            public void onCompress(int done, int total) {
+                compressionProgress.accept(done, total);
+            }
+
+            @Override
             public boolean isCancelled() {
                 return cancelled.get();
             }
         };
-        CompletableFuture<Integer> result = CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<SaveResult> result = CompletableFuture.supplyAsync(() -> {
             try {
-                composer.compose(snapshot, registry, imagePageSize, output, listener);
-                return snapshot.size();
+                return composer.compose(snapshot, registry, imagePageSize, compression, output, listener);
             } catch (PdfLocalException e) {
                 throw new CompletionException(e);
             }
         }, background);
         return new SaveOperation(result, () -> cancelled.set(true));
+    }
+
+    long sourceBytes() {
+        long total = 0;
+        for (Path path : items.stream()
+                .map(item -> item.isImage() ? item.imagePath() : sourcePath(item.sourceId()))
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList()) {
+            try {
+                total += Files.size(path);
+            } catch (IOException e) {
+                continue;
+            }
+        }
+        return total;
+    }
+
+    CompletableFuture<ImageShare> imageShare() {
+        List<PageItem> snapshot = List.copyOf(items);
+        return CompletableFuture.supplyAsync(() -> ImageShare.measure(snapshot, registry), background);
     }
 
     boolean hasSignedSources() {

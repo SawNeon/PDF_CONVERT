@@ -348,3 +348,24 @@
     -fx-text-fill: -color-fg-default;
     -fx-underline: true;
 }
+
+.dialog-intro {
+    -fx-text-fill: -color-fg-default;
+}
+
+.option-detail {
+    -fx-font-size: 12px;
+    -fx-text-fill: -color-fg-muted;
+}
+
+.dialog-notice {
+    -fx-font-size: 12px;
+    -fx-text-fill: -color-warning-fg;
+}
+
+.tool-heading {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -color-fg-muted;
+    -fx-padding: 6 8 2 8;
+}

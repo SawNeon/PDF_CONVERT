@@ -1,9 +1,13 @@
 package br.com.pdflocal.ui;
 
+import br.com.pdflocal.model.CompressionLevel;
 import br.com.pdflocal.model.PageItem;
 import br.com.pdflocal.service.ImportResult;
+import br.com.pdflocal.service.SaveResult;
 import br.com.pdflocal.util.AppSettings;
+import br.com.pdflocal.util.FileSizes;
 import br.com.pdflocal.util.Messages;
+import br.com.pdflocal.util.OutputNames;
 import br.com.pdflocal.util.PdfLocalException;
 import br.com.pdflocal.util.SaveCancelledException;
 import java.io.File;
@@ -45,6 +49,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
     private final Label developerCredit = new Label(Messages.get("app.developer"));
 
     private DocumentSession.SaveOperation saving;
+    private CompressionLevel savingLevel = CompressionLevel.NONE;
     private boolean cancelRequested;
     private boolean busy;
     private String busyMessage = "";
@@ -56,7 +61,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
         this.settings = settings;
         Theme theme = Theme.parse(settings.theme());
         Appearance.apply(this, theme);
-        this.toolbar = new Toolbar(this::addFiles, this::clear, this::save, grid::setViewMode,
+        this.toolbar = new Toolbar(this::addFiles, this::clear, this::save, tools(), grid::setViewMode,
                 this::toggleTheme, theme, this::showAbout);
 
         progress.setPrefWidth(160);
@@ -84,6 +89,10 @@ public final class MainView extends BorderPane implements AutoCloseable {
         setOnDragOver(this::onDragOver);
         setOnDragDropped(this::onDragDropped);
         refreshState();
+    }
+
+    private List<Tool> tools() {
+        return List.of(new Tool(ToolGroup.OPTIMIZE, "toolbar.compress", this::compress, true));
     }
 
     public void importFiles(List<Path> files) {
@@ -133,13 +142,35 @@ public final class MainView extends BorderPane implements AutoCloseable {
     }
 
     private void save() {
+        startSaving(CompressionLevel.NONE);
+    }
+
+    private void compress() {
+        if (busy || session.items().isEmpty()) {
+            return;
+        }
+        int pages = session.items().size();
+        int files = session.fileCount();
+        long bytes = session.sourceBytes();
+        startBusy(Messages.get("status.analyzing"));
+        session.imageShare().whenComplete((share, error) -> Platform.runLater(() -> {
+            endBusy();
+            if (error != null) {
+                LOG.log(Level.WARNING, "Analysis failed: {0}", causeOf(error).getClass().getSimpleName());
+            }
+            CompressDialog.show(stage, pages, files, bytes, error == null ? share : null).ifPresent(this::startSaving);
+        }));
+    }
+
+    private void startSaving(CompressionLevel level) {
         if (busy || session.items().isEmpty()) {
             return;
         }
         if (session.hasSignedSources() && !Dialogs.confirmSignatureLoss(stage)) {
             return;
         }
-        Path output = Dialogs.chooseOutput(stage, lastDirectory);
+        String suggestedName = suggestedOutputName(level);
+        Path output = Dialogs.chooseOutput(stage, lastDirectory, suggestedName);
         if (output == null) {
             return;
         }
@@ -147,19 +178,34 @@ public final class MainView extends BorderPane implements AutoCloseable {
         if (parent != null) {
             lastDirectory = parent;
         }
+        long originalBytes = level.isEnabled() ? session.sourceBytes() : 0;
         startBusy(Messages.get("status.saving"));
         grid.setEditable(false);
         progress.setProgress(0);
         cancelRequested = false;
+        savingLevel = level;
         AtomicInteger lastPercent = new AtomicInteger(-1);
-        saving = session.startSave(output, toolbar.pageSize(), (done, total) -> {
+        AtomicInteger lastCompressPercent = new AtomicInteger(-1);
+        saving = session.startSave(output, toolbar.pageSize(), level, (done, total) -> {
             int percent = done * 100 / total;
             if (lastPercent.getAndSet(percent) != percent) {
                 Platform.runLater(() -> showSaveProgress(done, total));
             }
+        }, (done, total) -> {
+            int percent = done * 100 / Math.max(1, total);
+            if (lastCompressPercent.getAndSet(percent) != percent) {
+                Platform.runLater(() -> showCompressProgress(done, total));
+            }
         });
         refreshState();
-        saving.result().whenComplete((pages, error) -> Platform.runLater(() -> finishSave(pages, error)));
+        saving.result().whenComplete((result, error) ->
+                Platform.runLater(() -> finishSave(result, error, originalBytes)));
+    }
+
+    private String suggestedOutputName(CompressionLevel level) {
+        String suffixKey = level.isEnabled() ? "output.suffix.compressed"
+                : session.fileCount() == 1 ? "output.suffix.edited" : "output.suffix.merged";
+        return OutputNames.suggest(session.displayName(session.items().get(0)), Messages.get(suffixKey));
     }
 
     private void cancelSave() {
@@ -179,7 +225,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
         }
         if (done >= total) {
             progress.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
-            busyMessage = Messages.get("status.saving.finishing");
+            busyMessage = Messages.get(savingLevel.isEnabled() ? "status.compressing.start" : "status.saving.finishing");
         } else {
             progress.setProgress(done / (double) total);
             busyMessage = Messages.format("status.saving.progress", done, total);
@@ -187,18 +233,44 @@ public final class MainView extends BorderPane implements AutoCloseable {
         refreshState();
     }
 
-    private void finishSave(Integer pages, Throwable error) {
+    private void showCompressProgress(int done, int total) {
+        if (saving == null || cancelRequested) {
+            return;
+        }
+        if (done >= total) {
+            progress.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
+            busyMessage = Messages.get("status.saving.finishing");
+        } else {
+            progress.setProgress(done / (double) total);
+            busyMessage = Messages.format("status.compressing", done, total);
+        }
+        refreshState();
+    }
+
+    private void finishSave(SaveResult result, Throwable error, long originalBytes) {
         saving = null;
         grid.setEditable(true);
         endBusy();
         if (error == null) {
-            notice = Messages.format("status.saved", pages);
+            notice = successNotice(result, originalBytes);
         } else if (causeOf(error) instanceof SaveCancelledException) {
             notice = Messages.get(Messages.SAVE_CANCELLED);
         } else {
             Dialogs.showError(stage, messageOf(error, Messages.SAVE_FAILED));
         }
         refreshState();
+    }
+
+    private String successNotice(SaveResult result, long originalBytes) {
+        if (originalBytes <= 0) {
+            return Messages.format("status.saved", result.pages());
+        }
+        if (result.outputBytes() >= originalBytes) {
+            return Messages.format("status.compressed.same", result.pages(), FileSizes.format(result.outputBytes()));
+        }
+        long percent = Math.round(100.0 * (originalBytes - result.outputBytes()) / originalBytes);
+        return Messages.format("status.compressed", FileSizes.format(originalBytes),
+                FileSizes.format(result.outputBytes()), percent);
     }
 
     private void finishImport(ImportResult result, Throwable error) {

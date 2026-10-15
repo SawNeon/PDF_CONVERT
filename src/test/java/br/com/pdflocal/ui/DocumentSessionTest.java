@@ -59,6 +59,19 @@ class DocumentSessionTest {
     }
 
     @Test
+    void imageShareReflectsTheListedPagesOnly() throws Exception {
+        Path scan = TestFiles.scannedPdf(directory, "scan.pdf", 1, 1200, 1700, 0.9f, false);
+        load(scan, pdfA);
+
+        double mixed = session.imageShare().get(TIMEOUT_SECONDS, TimeUnit.SECONDS).share();
+        session.delete(List.of(1, 2, 3));
+        double scanOnly = session.imageShare().get(TIMEOUT_SECONDS, TimeUnit.SECONDS).share();
+
+        assertTrue(scanOnly > mixed, "mixed " + mixed + " scanOnly " + scanOnly);
+        assertTrue(scanOnly > 0.9);
+    }
+
+    @Test
     void deletedPagesAreMissingFromTheSavedPdf() throws Exception {
         load(pdfA, pdfB);
 
@@ -253,7 +266,7 @@ class DocumentSessionTest {
         DocumentSession.SaveOperation operation = session.startSave(
                 directory.resolve("progress.pdf"), PageSize.A4, (done, total) -> progress.add(done + "/" + total));
 
-        assertEquals(5, operation.result().get(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+        assertEquals(5, operation.result().get(TIMEOUT_SECONDS, TimeUnit.SECONDS).pages());
         assertEquals(List.of("1/5", "2/5", "3/5", "4/5", "5/5"), progress);
     }
 
@@ -281,6 +294,36 @@ class DocumentSessionTest {
         assertTrue(error.getCause().getCause() instanceof br.com.pdflocal.util.SaveCancelledException
                 || error.getCause() instanceof br.com.pdflocal.util.SaveCancelledException);
         assertFalse(java.nio.file.Files.exists(output));
+    }
+
+    @Test
+    void sourceBytesSumsEachDistinctFileOnce() throws Exception {
+        Path photo = TestFiles.image(directory, "photo.png", "png", 30, 30);
+        load(pdfA, pdfB, photo);
+        long expected = java.nio.file.Files.size(pdfA) + java.nio.file.Files.size(pdfB) + java.nio.file.Files.size(photo);
+
+        assertEquals(expected, session.sourceBytes());
+
+        session.delete(List.of(3, 4));
+        assertEquals(java.nio.file.Files.size(pdfA) + java.nio.file.Files.size(photo), session.sourceBytes());
+    }
+
+    @Test
+    void compressedSaveReportsTheCompressionAndIsSmaller() throws Exception {
+        Path scan = TestFiles.scannedPdf(directory, "scan.pdf", 2, 2000, 2800, 0.9f, false);
+        load(scan);
+        List<String> progress = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+        DocumentSession.SaveOperation compressed = session.startSave(
+                directory.resolve("small.pdf"), PageSize.A4, br.com.pdflocal.model.CompressionLevel.MEDIUM,
+                (done, total) -> { }, (done, total) -> progress.add(done + "/" + total));
+        br.com.pdflocal.service.SaveResult result = compressed.result().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        assertEquals(2, result.pages());
+        assertEquals(2, result.compression().replaced());
+        assertEquals(List.of("1/2", "2/2"), progress);
+        assertTrue(result.outputBytes() < java.nio.file.Files.size(scan) / 2);
+        assertEquals(java.nio.file.Files.size(directory.resolve("small.pdf")), result.outputBytes());
     }
 
     @Test
