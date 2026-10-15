@@ -36,7 +36,31 @@ Os testes geram todos os PDFs e imagens por código. Nenhum documento real é us
 - Duplo clique abre a página em tamanho grande, com zoom e navegação.
 - **Imagens em** escolhe o tamanho da página das imagens: Original ou A4 (margem de 10 mm, retrato ou paisagem automático).
 - **Salvar PDF** grava o resultado. É possível cancelar durante o salvamento.
+- **Comprimir PDF** abre uma janela com três níveis (Leve, Média e Forte), e **Salvar...** grava o arquivo menor. Para comprimir um PDF, adicione-o, clique em Comprimir PDF, escolha o nível e salve. Ao final, a barra de status mostra o tamanho antes e depois.
 - O botão de tema alterna entre claro e escuro, e a escolha é lembrada.
+
+## Como funciona a compressão
+
+A compressão age só nas **imagens** do PDF (escaneamentos e fotos), que são quase todo o peso desses arquivos. O texto e as fontes não mudam. Para cada imagem, o app mede a resolução real em dpi (o tamanho em que ela é de fato desenhada na página, inclusive dentro de blocos aninhados), reduz até o alvo do nível e recodifica em JPEG:
+
+| Nível | Resolução máxima | Qualidade JPEG |
+|---|---|---|
+| Leve | 200 dpi | 80 |
+| Média | 150 dpi | 65 |
+| Forte | 100 dpi | 50 |
+
+- Só é reduzida a imagem que estiver mais de 15% acima do alvo do nível. Abaixo disso a resolução é mantida, porque a perda de nitidez não compensa o ganho.
+- Se algum uso da imagem não puder ser medido, ela não é alterada.
+- A imagem só é trocada se o resultado ficar pelo menos 5% menor, e nunca é ampliada.
+- Ficam como estão: imagens com transparência ou máscara, de 1 bit, CMYK, dentro de blocos de formulário (XObjects de formulário) e as que não puderem ser lidas.
+- Imagens em tons de cinza continuam em cinza.
+- A compressão é feita na cópia que está sendo montada. Os arquivos de origem, no disco e na memória, não são alterados.
+- A perda de qualidade é permanente no arquivo gerado. Em PDFs só de texto o ganho é pequeno, e o diálogo avisa quando menos de 30% do tamanho é imagem.
+
+## Limpeza de segurança ao salvar
+
+Todo PDF gerado sai sem as **miniaturas embutidas** das páginas. Um PDF editado pode guardar a prévia do conteúdo antigo, e isso vazaria dado que o usuário já alterou. O PDF gerado também não herda título, autor e demais metadados dos arquivos de origem. A limpeza é feita só na cópia que está sendo montada.
+- Em testes com escaneamentos sintéticos de A4 a 300 dpi, a redução ficou entre 55% (Leve) e 90% (Forte). O resultado real depende dos seus documentos.
 
 ## Identidade visual
 
@@ -64,7 +88,11 @@ O script faz, em ordem: build (`mvn -Pdist package`), runtime reduzido com `jlin
 | `installer\PdfLocal-<versão>.msi` | Instalador (só com `-Msi`). |
 | `SHA256SUMS.txt` | Hash de cada artefato. |
 
-Parâmetros: `-Maven <caminho do mvn>`, `-SkipBuild` (reaproveita o build anterior) e `-Msi`.
+O script encontra sozinho o JDK 21 (em `JAVA_HOME`, nas pastas de instalação comuns e na pasta `.jdks` do IntelliJ) e o Maven (no PATH, no cache do wrapper do Maven ou no Maven embutido do IntelliJ), e mostra no início quais usou.
+
+Parâmetros opcionais: `-JavaHome <pasta do JDK 21>`, `-Maven <caminho do mvn>`, `-SkipBuild` (reaproveita o build anterior) e `-Msi`.
+
+No IntelliJ, a configuração de execução **Gerar dist** (arquivo `.run/Gerar dist.run.xml`) roda esse script com um clique, no menu de execução, no topo da janela. Se ela não aparecer, crie uma em *Run | Edit Configurations | + | Shell Script*, com *Script file* `packaginguild-dist.ps1`, interpretador `powershell.exe`, opções do interpretador `-NoProfile -ExecutionPolicy Bypass -File` e diretório de trabalho na raiz do projeto.
 
 A memória máxima da JVM no pacote é `-Xmx1g`.
 
@@ -151,10 +179,12 @@ Verificação feita nesta versão: como a chave do NVD não estava disponível, 
 br.com.pdflocal
 ├── app        Launcher, PdfLocalApp
 ├── model      PageItem, SourceDocument, PageSize, PageOrder, PageEdits, UndoHistory, PageGroups
-├── service    FileTypeDetector, SourceRegistry, ThumbnailService, DocumentComposer,
+├── service    FileTypeDetector, SourceRegistry, ThumbnailService, DocumentComposer, OutputStep (passos de saída:
+│              CompressStep, StripThumbnailsStep), PdfCompressor, ImageResolutionFinder, ImageShare,
 │              ImageToPageService, ImportService, ExifOrientation
-├── ui         MainView, PageGrid, PageCard, PreviewPane, Toolbar, DocumentSession, Dialogs
-└── util       Exceções de domínio, Messages, AppSettings, LogSetup
+├── ui         MainView, PageGrid, PageCard, PreviewPane, Toolbar (menu Ferramentas: Tool, ToolGroup),
+│              DocumentSession, Dialogs
+└── util       Exceções de domínio, Messages, AppSettings, LogSetup, OutputNames
 ```
 
 As regras do projeto e o plano de fases estão em `CLAUDE.md` e `docs/PLANO.md`.
