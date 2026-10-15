@@ -7,6 +7,7 @@ import br.com.pdflocal.model.PageItem;
 import br.com.pdflocal.service.CompressStep;
 import br.com.pdflocal.service.CropStep;
 import br.com.pdflocal.service.FileTypeDetector;
+import br.com.pdflocal.service.FormFiller;
 import br.com.pdflocal.service.ImportResult;
 import br.com.pdflocal.service.OutputStep;
 import br.com.pdflocal.service.PageNumbersStep;
@@ -154,6 +155,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
                 new Tool(ToolGroup.EDIT, "tool.numbers", this::pageNumbers, true),
                 new Tool(ToolGroup.EDIT, "tool.watermark", this::watermark, true),
                 new Tool(ToolGroup.EDIT, "tool.crop", this::crop, true),
+                new Tool(ToolGroup.EDIT, "tool.form", this::fillForm, false),
                 new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.export-images", this::exportImages, true),
                 new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.pdfa", this::convertToPdfA, true),
                 new Tool(ToolGroup.SECURITY, "tool.redact", this::redact, true),
@@ -255,6 +257,98 @@ public final class MainView extends BorderPane implements AutoCloseable {
         });
     }
 
+    private void fillForm() {
+        if (busy) {
+            return;
+        }
+        Path input = Dialogs.choosePdf(stage, lastDirectory, "dialog.form.choose");
+        if (input == null) {
+            return;
+        }
+        Path parent = input.toAbsolutePath().getParent();
+        if (parent != null) {
+            lastDirectory = parent;
+        }
+        inspectForm(input, null);
+    }
+
+    private void inspectForm(Path input, char[] password) {
+        startBusy(Messages.get("status.analyzing"));
+        session.inspectForm(input, copyOf(password)).whenComplete((info, error) -> Platform.runLater(() -> {
+            endBusy();
+            if (error != null) {
+                failForm(input, password, error, retry -> inspectForm(input, retry));
+            } else {
+                chooseFormValues(input, password, info);
+            }
+        }));
+    }
+
+    private void chooseFormValues(Path input, char[] password, FormFiller.FormInfo info) {
+        Path fileName = input.getFileName();
+        String name = fileName == null ? "" : fileName.toString();
+        if (info.dynamicXfa()) {
+            wipe(password);
+            Dialogs.showError(stage, Messages.get(Messages.FORM_XFA));
+            return;
+        }
+        if (info.fields().isEmpty()) {
+            wipe(password);
+            Dialogs.showError(stage, Messages.get(Messages.FORM_MISSING));
+            return;
+        }
+        if (info.hasSignatures() && !Dialogs.confirmSignatureLoss(stage)) {
+            wipe(password);
+            return;
+        }
+        Optional<FormDialog.Answers> answers = FormDialog.show(stage, name, info);
+        if (answers.isEmpty()) {
+            wipe(password);
+            return;
+        }
+        Path output = Dialogs.chooseOutput(stage, lastDirectory,
+                OutputNames.suggest(name, Messages.get("output.suffix.filled")));
+        if (output == null) {
+            wipe(password);
+            return;
+        }
+        startBusy(Messages.get("status.filling"));
+        session.fillForm(input, output, answers.get().changes(), answers.get().flatten(), copyOf(password))
+                .whenComplete((result, error) -> Platform.runLater(() -> {
+                    endBusy();
+                    if (error == null) {
+                        wipe(password);
+                        notice = Messages.format("status.filled", result.filled());
+                        refreshState();
+                    } else {
+                        failForm(input, password, error, retry -> chooseFormValues(input, retry, info));
+                    }
+                }));
+    }
+
+    private void failForm(Path input, char[] password, Throwable error,
+                          java.util.function.Consumer<char[]> retryWithPassword) {
+        Throwable cause = causeOf(error);
+        wipe(password);
+        if (cause instanceof PasswordProtectedException) {
+            Path name = input.getFileName();
+            PasswordDialog.show(stage, name == null ? "" : name.toString(), cause instanceof WrongPasswordException)
+                    .ifPresent(retryWithPassword);
+            return;
+        }
+        Dialogs.showError(stage, messageOf(error, Messages.FILE_UNREADABLE));
+    }
+
+    private static char[] copyOf(char[] password) {
+        return password == null ? null : password.clone();
+    }
+
+    private static void wipe(char[] password) {
+        if (password != null) {
+            Arrays.fill(password, '\0');
+        }
+    }
+
     private void redact() {
         if (busy || session.items().isEmpty()) {
             return;
@@ -274,7 +368,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
         if (busy) {
             return;
         }
-        Path input = Dialogs.chooseFileToRepair(stage, lastDirectory);
+        Path input = Dialogs.choosePdf(stage, lastDirectory, "dialog.repair.choose");
         if (input == null) {
             return;
         }

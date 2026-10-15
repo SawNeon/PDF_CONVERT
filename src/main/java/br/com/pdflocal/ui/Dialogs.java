@@ -72,9 +72,9 @@ final class Dialogs {
         return name.toLowerCase(Locale.ROOT).endsWith("." + extension) ? path : path.resolveSibling(name + "." + extension);
     }
 
-    static Path chooseFileToRepair(Window owner, Path initialDirectory) {
+    static Path choosePdf(Window owner, Path initialDirectory, String titleKey) {
         FileChooser chooser = new FileChooser();
-        chooser.setTitle(Messages.get("dialog.repair.choose"));
+        chooser.setTitle(Messages.get(titleKey));
         chooser.getExtensionFilters().add(
                 new FileChooser.ExtensionFilter(Messages.get("dialog.repair.filter"), "*.pdf"));
         applyInitialDirectory(chooser, initialDirectory);

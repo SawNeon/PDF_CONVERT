@@ -10,6 +10,7 @@ import br.com.pdflocal.model.SourceDocument;
 import br.com.pdflocal.model.UndoHistory;
 import br.com.pdflocal.service.CompressStep;
 import br.com.pdflocal.service.DocumentComposer;
+import br.com.pdflocal.service.FormFiller;
 import br.com.pdflocal.service.ImageShare;
 import br.com.pdflocal.service.ImportResult;
 import br.com.pdflocal.service.ImportService;
@@ -27,6 +28,7 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -54,6 +56,7 @@ final class DocumentSession implements AutoCloseable {
     private final DocumentComposer composer = new DocumentComposer();
     private final PageExporter exporter = new PageExporter(composer);
     private final PdfRepairer repairer = new PdfRepairer();
+    private final FormFiller formFiller = new FormFiller();
     private final ObservableList<PageItem> items = FXCollections.observableArrayList();
     private final UndoHistory history = new UndoHistory();
     private final Set<UUID> knownSources = new HashSet<>();
@@ -77,6 +80,27 @@ final class DocumentSession implements AutoCloseable {
     CompletableFuture<ImportResult> importFiles(List<Path> files) {
         List<Path> selected = List.copyOf(files);
         return CompletableFuture.supplyAsync(() -> importer.importFiles(selected), background);
+    }
+
+    CompletableFuture<FormFiller.FormInfo> inspectForm(Path input, char[] password) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return formFiller.inspect(input, password);
+            } catch (PdfLocalException e) {
+                throw new CompletionException(e);
+            }
+        }, background);
+    }
+
+    CompletableFuture<FormFiller.Result> fillForm(Path input, Path output, Map<String, String> values,
+                                                  boolean flatten, char[] password) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return formFiller.fill(input, output, values, flatten, password);
+            } catch (PdfLocalException e) {
+                throw new CompletionException(e);
+            }
+        }, background);
     }
 
     CompletableFuture<PdfRepairer.Report> repair(Path input, Path output, char[] password) {
