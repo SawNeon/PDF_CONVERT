@@ -7,4 +7,8 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 public interface OutputStep {
 
     void apply(PDDocument document, SaveListener listener) throws IOException, SaveCancelledException;
+
+    default boolean requiresClassicStructure() {
+        return false;
+    }
 }

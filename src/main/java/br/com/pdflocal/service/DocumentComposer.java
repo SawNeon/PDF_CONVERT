@@ -7,11 +7,8 @@ import br.com.pdflocal.util.Messages;
 import br.com.pdflocal.util.PdfLocalException;
 import br.com.pdflocal.util.SaveCancelledException;
 import java.io.IOException;
-import java.nio.file.AccessDeniedException;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -20,12 +17,11 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.pdfbox.io.IOUtils;
+import org.apache.pdfbox.pdfwriter.compress.CompressParameters;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 
 public final class DocumentComposer {
-
-    private static final long LOW_SPACE_BYTES = 1024 * 1024;
 
     public record Produced<T>(T value, long bytes) {
     }
@@ -70,7 +66,11 @@ public final class DocumentComposer {
                 step.apply(document, listener);
             }
             throwIfCancelled(listener);
-            document.save(temporary.toFile());
+            if (steps.stream().anyMatch(OutputStep::requiresClassicStructure)) {
+                document.save(temporary.toFile(), CompressParameters.NO_COMPRESSION);
+            } else {
+                document.save(temporary.toFile());
+            }
             return null;
         });
         LOG.log(Level.INFO, "PDF saved with {0} pages", items.size());
@@ -106,15 +106,15 @@ public final class DocumentComposer {
             }
             throwIfCancelled(listener);
             long outputBytes = Files.size(temporary);
-            moveAtomically(temporary, output);
+            OutputFiles.moveAtomically(temporary, output);
             temporary = null;
             return new Produced<>(value, outputBytes);
         } catch (IOException | RuntimeException e) {
             LOG.log(Level.WARNING, "Failed to write the output: {0}", e.getClass().getSimpleName());
-            throw new PdfLocalException(classify(e, usableSpace(directory)), e);
+            throw new PdfLocalException(classify(e, OutputFiles.usableSpace(directory)), e);
         } finally {
             unlock(locks);
-            deleteQuietly(temporary);
+            OutputFiles.deleteQuietly(temporary);
         }
     }
 
@@ -127,21 +127,13 @@ public final class DocumentComposer {
     }
 
     static String classify(Exception error, long usableSpace) {
-        if (error instanceof AccessDeniedException) {
+        if (OutputFiles.isAccessDenied(error)) {
             return Messages.SAVE_DENIED;
         }
-        if (error instanceof IOException && usableSpace >= 0 && usableSpace < LOW_SPACE_BYTES) {
+        if (OutputFiles.isLowOnSpace(error, usableSpace)) {
             return Messages.SAVE_NO_SPACE;
         }
         return Messages.SAVE_FAILED;
-    }
-
-    private static long usableSpace(Path directory) {
-        try {
-            return Files.getFileStore(directory).getUsableSpace();
-        } catch (IOException | RuntimeException e) {
-            return -1;
-        }
     }
 
     private static void throwIfCancelled(SaveListener listener) throws SaveCancelledException {
@@ -210,36 +202,9 @@ public final class DocumentComposer {
             throw new PdfLocalException(Messages.SAVE_FOLDER_MISSING);
         }
         for (Path input : inputs) {
-            if (isSameFile(input, output)) {
+            if (OutputFiles.isSameFile(input, output)) {
                 throw new PdfLocalException(Messages.SAVE_OVERWRITES_SOURCE);
             }
-        }
-    }
-
-    private static boolean isSameFile(Path a, Path b) {
-        try {
-            return Files.exists(b) && Files.isSameFile(a, b);
-        } catch (IOException e) {
-            return a.toAbsolutePath().normalize().equals(b.toAbsolutePath().normalize());
-        }
-    }
-
-    private static void moveAtomically(Path source, Path target) throws IOException {
-        try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException e) {
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-
-    private static void deleteQuietly(Path file) {
-        if (file == null) {
-            return;
-        }
-        try {
-            Files.deleteIfExists(file);
-        } catch (IOException e) {
-            LOG.log(Level.WARNING, "Failed to delete temporary file: {0}", e.getClass().getSimpleName());
         }
     }
 }
