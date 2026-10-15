@@ -71,9 +71,11 @@ O menu **Ferramentas** reúne as funções que atuam sobre a lista de páginas. 
 | Girar todas as páginas | Gira a lista inteira em 90 graus (dá para desfazer com Ctrl+Z) |
 | Inserir números de página | Posição (6 cantos), formato (`1`, `Página 1`, `Página 1 de 10`, `1 / 10`), número inicial, tamanho da letra e opção de pular a primeira página |
 | Inserir marca d'água | Texto (ex.: CONFIDENCIAL) ou imagem JPEG/PNG, no centro, com opacidade e opção diagonal |
+| Preencher formulário | Lê os campos de um PDF (texto, caixa de seleção, opção única, lista), mostra um formulário e grava uma cópia preenchida, com opção de tornar os campos não editáveis |
 | Recortar PDF | Marque na página a área que será mantida; a mesma área vale para todas as páginas |
 
 - Números e marca d'água ficam no canto **visível** da página, mesmo em páginas giradas ou com área de corte.
+- **Preencher formulário** atua sobre **um PDF escolhido** (não sobre a lista de páginas) e grava uma cópia. Ficam de fora campos somente leitura, de senha, botões, assinaturas e listas de múltipla escolha. Formulários dinâmicos (XFA) não são suportados e o aplicativo avisa. Ao achatar, nenhum campo editável permanece no arquivo. Assinaturas digitais não são mantidas.
 - O texto da marca e o formato do número usam fontes padrão do PDF; letras com acento funcionam, símbolos fora desse conjunto são recusados.
 - **Recortar tem dois modos.** *Remover o conteúdo de fora* (padrão) transforma a página em imagem e apaga de verdade o que ficou fora, mas o texto deixa de ser selecionável. *Apenas ocultar* mantém o texto, porém o conteúdo cortado continua dentro do arquivo e pode ser recuperado; não use em documentos com dados sensíveis.
 
@@ -222,7 +224,7 @@ br.com.pdflocal
 ├── service    FileTypeDetector, SourceRegistry, ThumbnailService, DocumentComposer, OutputStep (passos de saída:
 │              CompressStep, StripThumbnailsStep, PageNumbersStep, WatermarkStep, CropStep),
 │              PdfCompressor, ImageResolutionFinder, ImageShare, PageGeometry, PageRasterizer, PageExporter,
-│              ProtectStep, PdfAStep, PdfRepairer, RedactStep,
+│              ProtectStep, PdfAStep, PdfRepairer, RedactStep, FormFiller, PdfLoader,
 │              ImageToPageService, ImportService, ExifOrientation
 ├── ui         MainView, PageGrid, PageCard, PreviewPane, Toolbar (menu Ferramentas: Tool, ToolGroup),
 │              DocumentSession, Dialogs
