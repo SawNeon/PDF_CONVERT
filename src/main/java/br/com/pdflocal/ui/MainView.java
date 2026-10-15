@@ -2,6 +2,7 @@ package br.com.pdflocal.ui;
 
 import br.com.pdflocal.model.CompressionLevel;
 import br.com.pdflocal.model.FileType;
+import br.com.pdflocal.model.ImageExportOptions;
 import br.com.pdflocal.model.PageItem;
 import br.com.pdflocal.service.CompressStep;
 import br.com.pdflocal.service.CropStep;
@@ -22,6 +23,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javafx.application.Application;
@@ -98,16 +100,35 @@ public final class MainView extends BorderPane implements AutoCloseable {
         refreshState();
     }
 
-    private record SaveJob(String suffixKey, List<OutputStep> steps, boolean compressing) {
+    private record SaveJob(String suffixKey, List<OutputStep> steps, boolean compressing,
+                           ImageExportOptions export) {
 
-        static final SaveJob PLAIN = new SaveJob(null, List.of(), false);
+        static final SaveJob PLAIN = new SaveJob(null, List.of(), false, null);
 
         static SaveJob compress(CompressionLevel level) {
-            return new SaveJob("output.suffix.compressed", List.of(new CompressStep(level)), true);
+            return new SaveJob("output.suffix.compressed", List.of(new CompressStep(level)), true, null);
         }
 
         static SaveJob of(String suffixKey, OutputStep step) {
-            return new SaveJob(suffixKey, List.of(step), false);
+            return new SaveJob(suffixKey, List.of(step), false, null);
+        }
+
+        static SaveJob exportImages(ImageExportOptions options) {
+            return new SaveJob("output.suffix.images", List.of(), false, options);
+        }
+
+        String stepKey() {
+            return compressing ? "status.compressing" : export != null ? "status.exporting" : "status.processing";
+        }
+
+        String afterPagesKey() {
+            if (compressing) {
+                return "status.compressing.start";
+            }
+            if (export != null) {
+                return "status.exporting.start";
+            }
+            return steps.isEmpty() ? "status.saving.finishing" : "status.processing.start";
         }
     }
 
@@ -118,7 +139,8 @@ public final class MainView extends BorderPane implements AutoCloseable {
                 new Tool(ToolGroup.EDIT, "tool.rotate.left", () -> rotateAll(-90), true),
                 new Tool(ToolGroup.EDIT, "tool.numbers", this::pageNumbers, true),
                 new Tool(ToolGroup.EDIT, "tool.watermark", this::watermark, true),
-                new Tool(ToolGroup.EDIT, "tool.crop", this::crop, true));
+                new Tool(ToolGroup.EDIT, "tool.crop", this::crop, true),
+                new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.export-images", this::exportImages, true));
     }
 
     public void importFiles(List<Path> files) {
@@ -216,6 +238,13 @@ public final class MainView extends BorderPane implements AutoCloseable {
         });
     }
 
+    private void exportImages() {
+        if (busy || session.items().isEmpty()) {
+            return;
+        }
+        ExportImagesDialog.show(stage).ifPresent(options -> startSaving(SaveJob.exportImages(options)));
+    }
+
     private void crop() {
         if (busy || session.items().isEmpty()) {
             return;
@@ -237,11 +266,14 @@ public final class MainView extends BorderPane implements AutoCloseable {
         if (busy || session.items().isEmpty()) {
             return;
         }
-        if (session.hasSignedSources() && !Dialogs.confirmSignatureLoss(stage)) {
+        if (job.export() == null && session.hasSignedSources() && !Dialogs.confirmSignatureLoss(stage)) {
             return;
         }
-        String suggestedName = suggestedOutputName(job);
-        Path output = Dialogs.chooseOutput(stage, lastDirectory, suggestedName);
+        String extension = outputExtension(job);
+        String suggestedName = suggestedOutputName(job, extension);
+        Path output = job.export() == null
+                ? Dialogs.chooseOutput(stage, lastDirectory, suggestedName)
+                : Dialogs.chooseExportOutput(stage, lastDirectory, suggestedName, extension);
         if (output == null) {
             return;
         }
@@ -256,27 +288,38 @@ public final class MainView extends BorderPane implements AutoCloseable {
         cancelRequested = false;
         savingJob = job;
         AtomicInteger lastPercent = new AtomicInteger(-1);
-        AtomicInteger lastCompressPercent = new AtomicInteger(-1);
-        saving = session.startSave(output, toolbar.pageSize(), job.steps(), (done, total) -> {
+        AtomicInteger lastStepPercent = new AtomicInteger(-1);
+        BiConsumer<Integer, Integer> onPage = (done, total) -> {
             int percent = done * 100 / total;
             if (lastPercent.getAndSet(percent) != percent) {
                 Platform.runLater(() -> showSaveProgress(done, total));
             }
-        }, (done, total) -> {
+        };
+        BiConsumer<Integer, Integer> onStep = (done, total) -> {
             int percent = done * 100 / Math.max(1, total);
-            if (lastCompressPercent.getAndSet(percent) != percent) {
+            if (lastStepPercent.getAndSet(percent) != percent) {
                 Platform.runLater(() -> showStepProgress(done, total));
             }
-        });
+        };
+        saving = job.export() == null
+                ? session.startSave(output, toolbar.pageSize(), job.steps(), onPage, onStep)
+                : session.startExport(output, toolbar.pageSize(), job.export(), onPage, onStep);
         refreshState();
         saving.result().whenComplete((result, error) ->
                 Platform.runLater(() -> finishSave(result, error, originalBytes)));
     }
 
-    private String suggestedOutputName(SaveJob job) {
+    private String outputExtension(SaveJob job) {
+        if (job.export() == null) {
+            return "pdf";
+        }
+        return session.items().size() == 1 ? job.export().format().extension() : "zip";
+    }
+
+    private String suggestedOutputName(SaveJob job, String extension) {
         String suffixKey = job.suffixKey() != null ? job.suffixKey()
                 : session.fileCount() == 1 ? "output.suffix.edited" : "output.suffix.merged";
-        return OutputNames.suggest(session.displayName(session.items().get(0)), Messages.get(suffixKey));
+        return OutputNames.suggest(session.displayName(session.items().get(0)), Messages.get(suffixKey), extension);
     }
 
     private void cancelSave() {
@@ -296,8 +339,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
         }
         if (done >= total) {
             progress.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
-            busyMessage = Messages.get(savingJob.compressing() ? "status.compressing.start"
-                    : savingJob.steps().isEmpty() ? "status.saving.finishing" : "status.processing.start");
+            busyMessage = Messages.get(savingJob.afterPagesKey());
         } else {
             progress.setProgress(done / (double) total);
             busyMessage = Messages.format("status.saving.progress", done, total);
@@ -314,7 +356,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
             busyMessage = Messages.get("status.saving.finishing");
         } else {
             progress.setProgress(done / (double) total);
-            busyMessage = Messages.format(savingJob.compressing() ? "status.compressing" : "status.processing", done, total);
+            busyMessage = Messages.format(savingJob.stepKey(), done, total);
         }
         refreshState();
     }
@@ -334,6 +376,11 @@ public final class MainView extends BorderPane implements AutoCloseable {
     }
 
     private String successNotice(SaveResult result, long originalBytes) {
+        if (savingJob.export() != null) {
+            return result.pages() == 1
+                    ? Messages.format("status.exported.single", FileSizes.format(result.outputBytes()))
+                    : Messages.format("status.exported.zip", result.pages(), FileSizes.format(result.outputBytes()));
+        }
         if (originalBytes <= 0) {
             return Messages.format("status.saved", result.pages());
         }

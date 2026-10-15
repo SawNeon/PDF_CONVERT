@@ -46,10 +46,20 @@ final class Dialogs {
     }
 
     static Path chooseOutput(Window owner, Path initialDirectory, String suggestedName) {
+        return chooseFile(owner, initialDirectory, suggestedName, Messages.get("dialog.save.title"),
+                Messages.get("dialog.save.filter"), "pdf");
+    }
+
+    static Path chooseExportOutput(Window owner, Path initialDirectory, String suggestedName, String extension) {
+        return chooseFile(owner, initialDirectory, suggestedName, Messages.get("dialog.export.title"),
+                Messages.get("dialog.export.filter." + extension), extension);
+    }
+
+    private static Path chooseFile(Window owner, Path initialDirectory, String suggestedName, String title,
+                                   String filterDescription, String extension) {
         FileChooser chooser = new FileChooser();
-        chooser.setTitle(Messages.get("dialog.save.title"));
-        chooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter(Messages.get("dialog.save.filter"), "*.pdf"));
+        chooser.setTitle(title);
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(filterDescription, "*." + extension));
         chooser.setInitialFileName(suggestedName);
         applyInitialDirectory(chooser, initialDirectory);
         File file = chooser.showSaveDialog(owner);
@@ -58,7 +68,7 @@ final class Dialogs {
         }
         Path path = file.toPath();
         String name = path.getFileName().toString();
-        return name.toLowerCase(Locale.ROOT).endsWith(".pdf") ? path : path.resolveSibling(name + ".pdf");
+        return name.toLowerCase(Locale.ROOT).endsWith("." + extension) ? path : path.resolveSibling(name + "." + extension);
     }
 
     static boolean confirmClear(Window owner) {

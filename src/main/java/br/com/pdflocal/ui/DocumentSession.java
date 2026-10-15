@@ -1,6 +1,7 @@
 package br.com.pdflocal.ui;
 
 import br.com.pdflocal.model.CompressionLevel;
+import br.com.pdflocal.model.ImageExportOptions;
 import br.com.pdflocal.model.PageEdits;
 import br.com.pdflocal.model.PageItem;
 import br.com.pdflocal.model.PageOrder;
@@ -13,6 +14,7 @@ import br.com.pdflocal.service.ImageShare;
 import br.com.pdflocal.service.ImportResult;
 import br.com.pdflocal.service.ImportService;
 import br.com.pdflocal.service.OutputStep;
+import br.com.pdflocal.service.PageExporter;
 import br.com.pdflocal.service.SaveListener;
 import br.com.pdflocal.service.SaveResult;
 import br.com.pdflocal.service.SourceRegistry;
@@ -49,6 +51,7 @@ final class DocumentSession implements AutoCloseable {
     private final ThumbnailService previews = new ThumbnailService(registry, PREVIEW_CACHE_SIZE, PREVIEW_DPI);
     private final ImportService importer = new ImportService(registry);
     private final DocumentComposer composer = new DocumentComposer();
+    private final PageExporter exporter = new PageExporter(composer);
     private final ObservableList<PageItem> items = FXCollections.observableArrayList();
     private final UndoHistory history = new UndoHistory();
     private final Set<UUID> knownSources = new HashSet<>();
@@ -134,11 +137,39 @@ final class DocumentSession implements AutoCloseable {
         return startSave(output, imagePageSize, List.of(new CompressStep(compression)), progress, compressionProgress);
     }
 
+    SaveOperation startExport(Path output, PageSize imagePageSize, ImageExportOptions options,
+                              BiConsumer<Integer, Integer> progress, BiConsumer<Integer, Integer> stepProgress) {
+        List<PageItem> snapshot = List.copyOf(items);
+        AtomicBoolean cancelled = new AtomicBoolean();
+        SaveListener listener = listener(cancelled, progress, stepProgress);
+        CompletableFuture<SaveResult> result = CompletableFuture.supplyAsync(() -> {
+            try {
+                return exporter.export(snapshot, registry, imagePageSize, options, output, listener);
+            } catch (PdfLocalException e) {
+                throw new CompletionException(e);
+            }
+        }, background);
+        return new SaveOperation(result, () -> cancelled.set(true));
+    }
+
     SaveOperation startSave(Path output, PageSize imagePageSize, List<OutputStep> steps,
                             BiConsumer<Integer, Integer> progress, BiConsumer<Integer, Integer> stepProgress) {
         List<PageItem> snapshot = List.copyOf(items);
         AtomicBoolean cancelled = new AtomicBoolean();
-        SaveListener listener = new SaveListener() {
+        SaveListener listener = listener(cancelled, progress, stepProgress);
+        CompletableFuture<SaveResult> result = CompletableFuture.supplyAsync(() -> {
+            try {
+                return composer.compose(snapshot, registry, imagePageSize, steps, output, listener);
+            } catch (PdfLocalException e) {
+                throw new CompletionException(e);
+            }
+        }, background);
+        return new SaveOperation(result, () -> cancelled.set(true));
+    }
+
+    private static SaveListener listener(AtomicBoolean cancelled, BiConsumer<Integer, Integer> progress,
+                                         BiConsumer<Integer, Integer> stepProgress) {
+        return new SaveListener() {
             @Override
             public void onPage(int done, int total) {
                 progress.accept(done, total);
@@ -159,14 +190,6 @@ final class DocumentSession implements AutoCloseable {
                 return cancelled.get();
             }
         };
-        CompletableFuture<SaveResult> result = CompletableFuture.supplyAsync(() -> {
-            try {
-                return composer.compose(snapshot, registry, imagePageSize, steps, output, listener);
-            } catch (PdfLocalException e) {
-                throw new CompletionException(e);
-            }
-        }, background);
-        return new SaveOperation(result, () -> cancelled.set(true));
     }
 
     long sourceBytes() {

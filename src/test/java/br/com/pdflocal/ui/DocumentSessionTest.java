@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import br.com.pdflocal.model.ImageExportOptions;
 import br.com.pdflocal.model.PageItem;
 import br.com.pdflocal.model.PageNumberOptions;
 import br.com.pdflocal.model.PageSize;
@@ -88,6 +89,25 @@ class DocumentSessionTest {
         assertEquals(List.of("A11", "A22", "A33"),
                 texts(output).stream().map(text -> text.replaceAll("\\s+", "")).toList());
         assertEquals(List.of(1, 2, 3), progress);
+    }
+
+    @Test
+    void exportingProducesAZipWithOneImagePerListedPage() throws Exception {
+        load(pdfA);
+        session.delete(List.of(1));
+        Path output = directory.resolve("images.zip");
+        List<Integer> progress = new CopyOnWriteArrayList<>();
+
+        DocumentSession.SaveOperation operation = session.startExport(output, PageSize.A4,
+                new ImageExportOptions(ImageExportOptions.Format.JPEG, 72), (done, total) -> { },
+                (done, total) -> progress.add(done));
+        operation.result().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(output.toFile())) {
+            assertEquals(List.of("pagina-001.jpg", "pagina-002.jpg"),
+                    zip.stream().map(java.util.zip.ZipEntry::getName).toList());
+        }
+        assertTrue(progress.contains(2));
     }
 
     @Test

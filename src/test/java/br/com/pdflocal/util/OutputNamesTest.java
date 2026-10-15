@@ -13,6 +13,12 @@ class OutputNamesTest {
     }
 
     @Test
+    void theExtensionCanBeChosen() {
+        assertEquals("laudo_imagens.zip", OutputNames.suggest("laudo.pdf", "_imagens", "zip"));
+        assertEquals("foto_imagens.jpg", OutputNames.suggest("foto.png", "_imagens", "jpg"));
+    }
+
+    @Test
     void onlyTheLastExtensionIsRemoved() {
         assertEquals("contrato.v2_unido.pdf", OutputNames.suggest("contrato.v2.pdf", "_unido"));
     }
