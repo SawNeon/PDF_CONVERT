@@ -19,6 +19,9 @@ public final class Messages {
     public static final String SAVE_NO_SPACE = "error.save.no-space";
     public static final String SAVE_FOLDER_MISSING = "error.save.folder-missing";
     public static final String PDF_PASSWORD_WRONG = "error.pdf.password.wrong";
+    public static final String FORM_MISSING = "error.form.missing";
+    public static final String FORM_XFA = "error.form.xfa";
+    public static final String FORM_VALUE_INVALID = "error.form.value";
 
     private static final ResourceBundle BUNDLE = ResourceBundle.getBundle("messages", Locale.ROOT);
 

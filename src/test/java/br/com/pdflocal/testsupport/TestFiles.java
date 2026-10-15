@@ -1,5 +1,15 @@
 package br.com.pdflocal.testsupport;
 
+import org.apache.pdfbox.cos.COSDictionary;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceEntry;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
+import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
+import org.apache.pdfbox.pdmodel.interactive.form.PDCheckBox;
+import org.apache.pdfbox.pdmodel.interactive.form.PDComboBox;
+import org.apache.pdfbox.pdmodel.interactive.form.PDRadioButton;
+import org.apache.pdfbox.pdmodel.interactive.form.PDTextField;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -366,5 +376,82 @@ public final class TestFiles {
         out.writeBytes(EXIF_HEADER);
         out.writeBytes(tiff);
         return out.toByteArray();
+    }
+
+    public static Path formPdf(Path directory, String name) throws IOException {
+        Path file = directory.resolve(name);
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.LETTER);
+            document.addPage(page);
+            PDAcroForm form = new PDAcroForm(document);
+            document.getDocumentCatalog().setAcroForm(form);
+            PDResources resources = new PDResources();
+            resources.put(COSName.getPDFName("Helv"), new PDType1Font(Standard14Fonts.FontName.HELVETICA));
+            form.setDefaultResources(resources);
+            form.setDefaultAppearance("/Helv 0 Tf 0 g");
+
+            PDTextField nome = textField(document, form, page, "nome", 50, 700, 250, 20);
+            nome.setMaxLen(20);
+            PDTextField observacoes = textField(document, form, page, "observacoes", 50, 620, 250, 60);
+            observacoes.setMultiline(true);
+            PDTextField protocolo = textField(document, form, page, "protocolo", 50, 580, 250, 20);
+            protocolo.setValue("123");
+            protocolo.setReadOnly(true);
+
+            PDCheckBox aceito = new PDCheckBox(form);
+            aceito.setPartialName("aceito");
+            form.getFields().add(aceito);
+            widget(document, aceito.getWidgets().get(0), page, 50, 540, 16, 16, "Yes");
+
+            PDComboBox cidade = new PDComboBox(form);
+            cidade.setPartialName("cidade");
+            cidade.setOptions(List.of("Varginha", "Belo Horizonte"));
+            form.getFields().add(cidade);
+            widget(document, cidade.getWidgets().get(0), page, 50, 500, 200, 20, null);
+
+            PDRadioButton sexo = new PDRadioButton(form);
+            sexo.setPartialName("sexo");
+            PDAnnotationWidget femenino = new PDAnnotationWidget();
+            PDAnnotationWidget masculino = new PDAnnotationWidget();
+            widget(document, femenino, page, 50, 460, 16, 16, "F");
+            widget(document, masculino, page, 100, 460, 16, 16, "M");
+            sexo.setWidgets(List.of(femenino, masculino));
+            form.getFields().add(sexo);
+
+            document.save(file.toFile());
+        }
+        return file;
+    }
+
+    private static PDTextField textField(PDDocument document, PDAcroForm form, PDPage page, String name, float x,
+                                         float y, float w, float h) throws IOException {
+        PDTextField field = new PDTextField(form);
+        field.setPartialName(name);
+        field.setDefaultAppearance("/Helv 12 Tf 0 g");
+        form.getFields().add(field);
+        widget(document, field.getWidgets().get(0), page, x, y, w, h, null);
+        return field;
+    }
+
+    private static void widget(PDDocument document, PDAnnotationWidget widget, PDPage page, float x, float y,
+                               float w, float h, String onState) throws IOException {
+        widget.setRectangle(new PDRectangle(x, y, w, h));
+        widget.setPage(page);
+        widget.setPrinted(true);
+        if (onState != null) {
+            COSDictionary states = new COSDictionary();
+            states.setItem(COSName.getPDFName(onState), emptyAppearance(document, w, h));
+            states.setItem(COSName.getPDFName("Off"), emptyAppearance(document, w, h));
+            PDAppearanceDictionary appearance = new PDAppearanceDictionary();
+            appearance.setNormalAppearance(new PDAppearanceEntry(states));
+            widget.setAppearance(appearance);
+        }
+        page.getAnnotations().add(widget);
+    }
+
+    private static PDAppearanceStream emptyAppearance(PDDocument document, float w, float h) {
+        PDAppearanceStream stream = new PDAppearanceStream(document);
+        stream.setBBox(new PDRectangle(0, 0, w, h));
+        return stream;
     }
 }

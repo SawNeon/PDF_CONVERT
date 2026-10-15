@@ -3,11 +3,8 @@ package br.com.pdflocal.service;
 import br.com.pdflocal.model.FileType;
 import br.com.pdflocal.model.PageItem;
 import br.com.pdflocal.model.SourceDocument;
-import br.com.pdflocal.util.CorruptFileException;
-import br.com.pdflocal.util.PasswordProtectedException;
 import br.com.pdflocal.util.PdfLocalException;
 import br.com.pdflocal.util.UnsupportedFileException;
-import br.com.pdflocal.util.WrongPasswordException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collection;
@@ -19,10 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 
 public final class SourceRegistry implements AutoCloseable {
 
@@ -43,8 +37,8 @@ public final class SourceRegistry implements AutoCloseable {
         if (detector.detect(file) != FileType.PDF) {
             throw new UnsupportedFileException();
         }
-        PDDocument document = load(file, password);
-        SourceDocument source = new SourceDocument(UUID.randomUUID(), file, document.getNumberOfPages(), hasSignature(document));
+        PDDocument document = PdfLoader.open(file, password);
+        SourceDocument source = new SourceDocument(UUID.randomUUID(), file, document.getNumberOfPages(), PdfLoader.hasSignature(document));
         entries.put(source.id(), new Entry(source, document, new ReentrantLock()));
         LOG.log(Level.INFO, "PDF opened with {0} pages", source.pageCount());
         return source;
@@ -105,28 +99,6 @@ public final class SourceRegistry implements AutoCloseable {
             throw new IllegalArgumentException("Unknown source document");
         }
         return entry;
-    }
-
-    private static PDDocument load(Path file, char[] password) throws PdfLocalException {
-        boolean hasPassword = password != null && password.length > 0;
-        try {
-            return Loader.loadPDF(file.toFile(), hasPassword ? new String(password) : "", null, null,
-                    IOUtils.createTempFileOnlyStreamCache());
-        } catch (InvalidPasswordException e) {
-            throw hasPassword ? new WrongPasswordException(e) : new PasswordProtectedException(e);
-        } catch (IOException | RuntimeException e) {
-            LOG.log(Level.WARNING, "Failed to read PDF: {0}", e.getClass().getSimpleName());
-            throw new CorruptFileException(e);
-        }
-    }
-
-    private static boolean hasSignature(PDDocument document) {
-        try {
-            return !document.getSignatureDictionaries().isEmpty();
-        } catch (RuntimeException e) {
-            LOG.log(Level.FINE, "Signature check failed: {0}", e.getClass().getSimpleName());
-            return false;
-        }
     }
 
     private static void closeQuietly(PDDocument document) {

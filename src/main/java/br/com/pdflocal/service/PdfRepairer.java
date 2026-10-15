@@ -2,10 +2,8 @@ package br.com.pdflocal.service;
 
 import br.com.pdflocal.util.CorruptFileException;
 import br.com.pdflocal.util.Messages;
-import br.com.pdflocal.util.PasswordProtectedException;
 import br.com.pdflocal.util.PdfLocalException;
 import br.com.pdflocal.util.UnsupportedFileException;
-import br.com.pdflocal.util.WrongPasswordException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -15,11 +13,9 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
 
@@ -62,13 +58,13 @@ public final class PdfRepairer {
 
     private Report rebuild(Path input, Path output, Path directory, char[] password) throws PdfLocalException {
         Path temporary = null;
-        try (PDDocument source = load(input, password);
+        try (PDDocument source = PdfLoader.open(input, password);
              PDDocument target = new PDDocument(IOUtils.createTempFileOnlyStreamCache())) {
             int found = pageCount(source);
             if (found <= 0) {
                 throw new CorruptFileException(new IOException("No pages could be found"));
             }
-            boolean signed = hasSignature(source);
+            boolean signed = PdfLoader.hasSignature(source);
             int recovered = 0;
             for (int index = 0; index < found; index++) {
                 if (copyPage(source, target, index)) {
@@ -94,19 +90,6 @@ public final class PdfRepairer {
             throw new PdfLocalException(DocumentComposer.classify(e, OutputFiles.usableSpace(directory)), e);
         } finally {
             OutputFiles.deleteQuietly(temporary);
-        }
-    }
-
-    private static PDDocument load(Path input, char[] password) throws PdfLocalException {
-        boolean hasPassword = password != null && password.length > 0;
-        try {
-            return Loader.loadPDF(input.toFile(), hasPassword ? new String(password) : "", null, null,
-                    IOUtils.createTempFileOnlyStreamCache());
-        } catch (InvalidPasswordException e) {
-            throw hasPassword ? new WrongPasswordException(e) : new PasswordProtectedException(e);
-        } catch (IOException | RuntimeException e) {
-            LOG.log(Level.WARNING, "Failed to read PDF: {0}", e.getClass().getSimpleName());
-            throw new CorruptFileException(e);
         }
     }
 
@@ -155,13 +138,5 @@ public final class PdfRepairer {
             }
         }
         return problems;
-    }
-
-    private static boolean hasSignature(PDDocument source) {
-        try {
-            return !source.getSignatureDictionaries().isEmpty();
-        } catch (RuntimeException e) {
-            return false;
-        }
     }
 }
