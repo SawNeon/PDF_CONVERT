@@ -91,11 +91,13 @@ O menu **Ferramentas** reúne as funções que atuam sobre a lista de páginas. 
 | Ferramenta | O que faz |
 |---|---|
 | Proteger com senha | Gera um PDF que só abre com a senha escolhida (AES de 256 bits, senha de pelo menos 8 caracteres, digitada duas vezes). A senha de proprietário é aleatória. |
+| Tarjar dados | Marque áreas sobre dados sensíveis (CPF, nomes, endereços). As páginas marcadas viram imagem com a tarja pintada nos pixels, e o texto coberto é apagado de verdade do arquivo. |
 | PDF para PDF/A | Gera um PDF/A-1b para arquivamento de longo prazo. Cada página vira imagem com perfil de cor sRGB e metadados PDF/A. |
 | Reparar PDF | Reconstrói a estrutura de um PDF danificado e grava uma cópia saudável, informando quantas páginas foram recuperadas. |
 
 - **Senha de PDF protegido.** Ao adicionar um PDF protegido, o aplicativo pede a senha em vez de recusar o arquivo. O PDF gerado a partir dele **não tem senha**; use Proteger com senha para proteger o resultado.
 - A senha nunca vai para o registro de atividades nem para as configurações, e a cópia na memória é apagada depois do uso. Limite do Java: o texto digitado num campo de senha fica em `String`, que não pode ser apagada à força da memória antes da coleta de lixo. Guarde a senha em local seguro: sem ela o arquivo não pode ser recuperado.
+- **Tarjar dados de verdade.** Cobrir um PDF com um retângulo preto deixa o texto por baixo, que ainda pode ser copiado. Aqui a página inteira é convertida em imagem antes de pintar a tarja, então não há texto para recuperar. As páginas sem tarja continuam com texto selecionável. Se uma tarja apontar para uma página que não existe, o salvamento falha em vez de pular a tarja.
 - **PDF/A e texto.** Como a página vira imagem, o texto deixa de ser selecionável e pesquisável, e o arquivo costuma crescer. O resultado é validado nos testes automáticos com o validador oficial do Apache PDFBox (`preflight`, usado só nos testes, não vai no instalador), que cobre o PDF/A-1b.
 - **Reparar não faz milagre.** Recupera arquivos com tabela de referências quebrada, final cortado ou lixo antes do cabeçalho. Conteúdo realmente destruído não volta, e as páginas que não puderem ser lidas são contadas como perdidas no relatório. Assinaturas digitais não são mantidas na cópia.
 - Ao gravar PDF/A o aplicativo usa a estrutura clássica do PDF (sem fluxos de referência cruzada), exigida pelo PDF/A-1.
@@ -220,7 +222,7 @@ br.com.pdflocal
 ├── service    FileTypeDetector, SourceRegistry, ThumbnailService, DocumentComposer, OutputStep (passos de saída:
 │              CompressStep, StripThumbnailsStep, PageNumbersStep, WatermarkStep, CropStep),
 │              PdfCompressor, ImageResolutionFinder, ImageShare, PageGeometry, PageRasterizer, PageExporter,
-│              ProtectStep, PdfAStep, PdfRepairer,
+│              ProtectStep, PdfAStep, PdfRepairer, RedactStep,
 │              ImageToPageService, ImportService, ExifOrientation
 ├── ui         MainView, PageGrid, PageCard, PreviewPane, Toolbar (menu Ferramentas: Tool, ToolGroup),
 │              DocumentSession, Dialogs
