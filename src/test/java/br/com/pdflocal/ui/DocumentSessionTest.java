@@ -5,12 +5,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import br.com.pdflocal.model.PageItem;
+import br.com.pdflocal.model.PageNumberOptions;
 import br.com.pdflocal.model.PageSize;
 import br.com.pdflocal.service.ImportResult;
+import br.com.pdflocal.service.PageNumbersStep;
 import br.com.pdflocal.testsupport.TempDirCleanup;
 import br.com.pdflocal.testsupport.TestFiles;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 import org.apache.pdfbox.Loader;
@@ -69,6 +72,22 @@ class DocumentSessionTest {
 
         assertTrue(scanOnly > mixed, "mixed " + mixed + " scanOnly " + scanOnly);
         assertTrue(scanOnly > 0.9);
+    }
+
+    @Test
+    void savingWithStepsAppliesThemAndReportsStepProgress() throws Exception {
+        load(pdfA);
+        Path output = directory.resolve("steps.pdf");
+        List<Integer> progress = new CopyOnWriteArrayList<>();
+        PageNumberOptions options = new PageNumberOptions(PageNumberOptions.Position.BOTTOM_CENTER, "{n}", 1, false, 12);
+
+        DocumentSession.SaveOperation operation = session.startSave(output, PageSize.A4,
+                List.of(new PageNumbersStep(options)), (done, total) -> { }, (done, total) -> progress.add(done));
+        operation.result().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        assertEquals(List.of("A11", "A22", "A33"),
+                texts(output).stream().map(text -> text.replaceAll("\\s+", "")).toList());
+        assertEquals(List.of(1, 2, 3), progress);
     }
 
     @Test

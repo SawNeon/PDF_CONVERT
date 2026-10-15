@@ -1,9 +1,16 @@
 package br.com.pdflocal.ui;
 
 import br.com.pdflocal.model.CompressionLevel;
+import br.com.pdflocal.model.FileType;
 import br.com.pdflocal.model.PageItem;
+import br.com.pdflocal.service.CompressStep;
+import br.com.pdflocal.service.CropStep;
+import br.com.pdflocal.service.FileTypeDetector;
 import br.com.pdflocal.service.ImportResult;
+import br.com.pdflocal.service.OutputStep;
+import br.com.pdflocal.service.PageNumbersStep;
 import br.com.pdflocal.service.SaveResult;
+import br.com.pdflocal.service.WatermarkStep;
 import br.com.pdflocal.util.AppSettings;
 import br.com.pdflocal.util.FileSizes;
 import br.com.pdflocal.util.Messages;
@@ -49,7 +56,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
     private final Label developerCredit = new Label(Messages.get("app.developer"));
 
     private DocumentSession.SaveOperation saving;
-    private CompressionLevel savingLevel = CompressionLevel.NONE;
+    private SaveJob savingJob = SaveJob.PLAIN;
     private boolean cancelRequested;
     private boolean busy;
     private String busyMessage = "";
@@ -91,8 +98,27 @@ public final class MainView extends BorderPane implements AutoCloseable {
         refreshState();
     }
 
+    private record SaveJob(String suffixKey, List<OutputStep> steps, boolean compressing) {
+
+        static final SaveJob PLAIN = new SaveJob(null, List.of(), false);
+
+        static SaveJob compress(CompressionLevel level) {
+            return new SaveJob("output.suffix.compressed", List.of(new CompressStep(level)), true);
+        }
+
+        static SaveJob of(String suffixKey, OutputStep step) {
+            return new SaveJob(suffixKey, List.of(step), false);
+        }
+    }
+
     private List<Tool> tools() {
-        return List.of(new Tool(ToolGroup.OPTIMIZE, "toolbar.compress", this::compress, true));
+        return List.of(
+                new Tool(ToolGroup.OPTIMIZE, "toolbar.compress", this::compress, true),
+                new Tool(ToolGroup.EDIT, "tool.rotate.right", () -> rotateAll(90), true),
+                new Tool(ToolGroup.EDIT, "tool.rotate.left", () -> rotateAll(-90), true),
+                new Tool(ToolGroup.EDIT, "tool.numbers", this::pageNumbers, true),
+                new Tool(ToolGroup.EDIT, "tool.watermark", this::watermark, true),
+                new Tool(ToolGroup.EDIT, "tool.crop", this::crop, true));
     }
 
     public void importFiles(List<Path> files) {
@@ -142,7 +168,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
     }
 
     private void save() {
-        startSaving(CompressionLevel.NONE);
+        startSaving(SaveJob.PLAIN);
     }
 
     private void compress() {
@@ -158,18 +184,63 @@ public final class MainView extends BorderPane implements AutoCloseable {
             if (error != null) {
                 LOG.log(Level.WARNING, "Analysis failed: {0}", causeOf(error).getClass().getSimpleName());
             }
-            CompressDialog.show(stage, pages, files, bytes, error == null ? share : null).ifPresent(this::startSaving);
+            CompressDialog.show(stage, pages, files, bytes, error == null ? share : null).ifPresent(level -> startSaving(SaveJob.compress(level)));
         }));
     }
 
-    private void startSaving(CompressionLevel level) {
+    private void rotateAll(int degrees) {
+        if (busy || session.items().isEmpty()) {
+            return;
+        }
+        session.rotate(java.util.stream.IntStream.range(0, session.items().size()).boxed().toList(), degrees);
+    }
+
+    private void pageNumbers() {
+        if (busy || session.items().isEmpty()) {
+            return;
+        }
+        PageNumbersDialog.show(stage).ifPresent(options ->
+                startSaving(SaveJob.of("output.suffix.numbered", new PageNumbersStep(options))));
+    }
+
+    private void watermark() {
+        if (busy || session.items().isEmpty()) {
+            return;
+        }
+        WatermarkDialog.show(stage, lastDirectory).ifPresent(options -> {
+            if (!options.isText() && !isSupportedWatermarkImage(options.imagePath())) {
+                Dialogs.showError(stage, Messages.get(Messages.FILE_UNSUPPORTED));
+                return;
+            }
+            startSaving(SaveJob.of("output.suffix.watermarked", new WatermarkStep(options)));
+        });
+    }
+
+    private void crop() {
+        if (busy || session.items().isEmpty()) {
+            return;
+        }
+        CropDialog.show(stage, session).ifPresent(options ->
+                startSaving(SaveJob.of("output.suffix.cropped", new CropStep(options))));
+    }
+
+    private static boolean isSupportedWatermarkImage(Path image) {
+        try {
+            FileType type = new FileTypeDetector().detect(image);
+            return type == FileType.JPEG || type == FileType.PNG;
+        } catch (PdfLocalException e) {
+            return false;
+        }
+    }
+
+    private void startSaving(SaveJob job) {
         if (busy || session.items().isEmpty()) {
             return;
         }
         if (session.hasSignedSources() && !Dialogs.confirmSignatureLoss(stage)) {
             return;
         }
-        String suggestedName = suggestedOutputName(level);
+        String suggestedName = suggestedOutputName(job);
         Path output = Dialogs.chooseOutput(stage, lastDirectory, suggestedName);
         if (output == null) {
             return;
@@ -178,15 +249,15 @@ public final class MainView extends BorderPane implements AutoCloseable {
         if (parent != null) {
             lastDirectory = parent;
         }
-        long originalBytes = level.isEnabled() ? session.sourceBytes() : 0;
+        long originalBytes = job.compressing() ? session.sourceBytes() : 0;
         startBusy(Messages.get("status.saving"));
         grid.setEditable(false);
         progress.setProgress(0);
         cancelRequested = false;
-        savingLevel = level;
+        savingJob = job;
         AtomicInteger lastPercent = new AtomicInteger(-1);
         AtomicInteger lastCompressPercent = new AtomicInteger(-1);
-        saving = session.startSave(output, toolbar.pageSize(), level, (done, total) -> {
+        saving = session.startSave(output, toolbar.pageSize(), job.steps(), (done, total) -> {
             int percent = done * 100 / total;
             if (lastPercent.getAndSet(percent) != percent) {
                 Platform.runLater(() -> showSaveProgress(done, total));
@@ -194,7 +265,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
         }, (done, total) -> {
             int percent = done * 100 / Math.max(1, total);
             if (lastCompressPercent.getAndSet(percent) != percent) {
-                Platform.runLater(() -> showCompressProgress(done, total));
+                Platform.runLater(() -> showStepProgress(done, total));
             }
         });
         refreshState();
@@ -202,8 +273,8 @@ public final class MainView extends BorderPane implements AutoCloseable {
                 Platform.runLater(() -> finishSave(result, error, originalBytes)));
     }
 
-    private String suggestedOutputName(CompressionLevel level) {
-        String suffixKey = level.isEnabled() ? "output.suffix.compressed"
+    private String suggestedOutputName(SaveJob job) {
+        String suffixKey = job.suffixKey() != null ? job.suffixKey()
                 : session.fileCount() == 1 ? "output.suffix.edited" : "output.suffix.merged";
         return OutputNames.suggest(session.displayName(session.items().get(0)), Messages.get(suffixKey));
     }
@@ -225,7 +296,8 @@ public final class MainView extends BorderPane implements AutoCloseable {
         }
         if (done >= total) {
             progress.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
-            busyMessage = Messages.get(savingLevel.isEnabled() ? "status.compressing.start" : "status.saving.finishing");
+            busyMessage = Messages.get(savingJob.compressing() ? "status.compressing.start"
+                    : savingJob.steps().isEmpty() ? "status.saving.finishing" : "status.processing.start");
         } else {
             progress.setProgress(done / (double) total);
             busyMessage = Messages.format("status.saving.progress", done, total);
@@ -233,7 +305,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
         refreshState();
     }
 
-    private void showCompressProgress(int done, int total) {
+    private void showStepProgress(int done, int total) {
         if (saving == null || cancelRequested) {
             return;
         }
@@ -242,7 +314,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
             busyMessage = Messages.get("status.saving.finishing");
         } else {
             progress.setProgress(done / (double) total);
-            busyMessage = Messages.format("status.compressing", done, total);
+            busyMessage = Messages.format(savingJob.compressing() ? "status.compressing" : "status.processing", done, total);
         }
         refreshState();
     }

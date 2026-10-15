@@ -7,10 +7,12 @@ import br.com.pdflocal.model.PageOrder;
 import br.com.pdflocal.model.PageSize;
 import br.com.pdflocal.model.SourceDocument;
 import br.com.pdflocal.model.UndoHistory;
+import br.com.pdflocal.service.CompressStep;
 import br.com.pdflocal.service.DocumentComposer;
 import br.com.pdflocal.service.ImageShare;
 import br.com.pdflocal.service.ImportResult;
 import br.com.pdflocal.service.ImportService;
+import br.com.pdflocal.service.OutputStep;
 import br.com.pdflocal.service.SaveListener;
 import br.com.pdflocal.service.SaveResult;
 import br.com.pdflocal.service.SourceRegistry;
@@ -129,6 +131,11 @@ final class DocumentSession implements AutoCloseable {
 
     SaveOperation startSave(Path output, PageSize imagePageSize, CompressionLevel compression,
                             BiConsumer<Integer, Integer> progress, BiConsumer<Integer, Integer> compressionProgress) {
+        return startSave(output, imagePageSize, List.of(new CompressStep(compression)), progress, compressionProgress);
+    }
+
+    SaveOperation startSave(Path output, PageSize imagePageSize, List<OutputStep> steps,
+                            BiConsumer<Integer, Integer> progress, BiConsumer<Integer, Integer> stepProgress) {
         List<PageItem> snapshot = List.copyOf(items);
         AtomicBoolean cancelled = new AtomicBoolean();
         SaveListener listener = new SaveListener() {
@@ -139,7 +146,12 @@ final class DocumentSession implements AutoCloseable {
 
             @Override
             public void onCompress(int done, int total) {
-                compressionProgress.accept(done, total);
+                stepProgress.accept(done, total);
+            }
+
+            @Override
+            public void onTransform(int done, int total) {
+                stepProgress.accept(done, total);
             }
 
             @Override
@@ -149,7 +161,7 @@ final class DocumentSession implements AutoCloseable {
         };
         CompletableFuture<SaveResult> result = CompletableFuture.supplyAsync(() -> {
             try {
-                return composer.compose(snapshot, registry, imagePageSize, compression, output, listener);
+                return composer.compose(snapshot, registry, imagePageSize, steps, output, listener);
             } catch (PdfLocalException e) {
                 throw new CompletionException(e);
             }
