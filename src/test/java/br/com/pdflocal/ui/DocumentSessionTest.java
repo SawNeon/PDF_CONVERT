@@ -111,6 +111,19 @@ class DocumentSessionTest {
     }
 
     @Test
+    void repairingWritesAHealthyCopyAndLeavesTheSourceAlone() throws Exception {
+        Path output = directory.resolve("repaired.pdf");
+        String before = TestFiles.sha256(pdfA);
+
+        br.com.pdflocal.service.PdfRepairer.Report report =
+                session.repair(pdfA, output, null).get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        assertEquals(3, report.pagesRecovered());
+        assertEquals(List.of("A1", "A2", "A3"), texts(output));
+        assertEquals(before, TestFiles.sha256(pdfA));
+    }
+
+    @Test
     void deletedPagesAreMissingFromTheSavedPdf() throws Exception {
         load(pdfA, pdfB);
 

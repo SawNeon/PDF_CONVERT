@@ -15,6 +15,7 @@ import br.com.pdflocal.service.ImportResult;
 import br.com.pdflocal.service.ImportService;
 import br.com.pdflocal.service.OutputStep;
 import br.com.pdflocal.service.PageExporter;
+import br.com.pdflocal.service.PdfRepairer;
 import br.com.pdflocal.service.SaveListener;
 import br.com.pdflocal.service.SaveResult;
 import br.com.pdflocal.service.SourceRegistry;
@@ -52,6 +53,7 @@ final class DocumentSession implements AutoCloseable {
     private final ImportService importer = new ImportService(registry);
     private final DocumentComposer composer = new DocumentComposer();
     private final PageExporter exporter = new PageExporter(composer);
+    private final PdfRepairer repairer = new PdfRepairer();
     private final ObservableList<PageItem> items = FXCollections.observableArrayList();
     private final UndoHistory history = new UndoHistory();
     private final Set<UUID> knownSources = new HashSet<>();
@@ -75,6 +77,16 @@ final class DocumentSession implements AutoCloseable {
     CompletableFuture<ImportResult> importFiles(List<Path> files) {
         List<Path> selected = List.copyOf(files);
         return CompletableFuture.supplyAsync(() -> importer.importFiles(selected), background);
+    }
+
+    CompletableFuture<PdfRepairer.Report> repair(Path input, Path output, char[] password) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return repairer.repair(input, output, password);
+            } catch (PdfLocalException e) {
+                throw new CompletionException(e);
+            }
+        }, background);
     }
 
     CompletableFuture<ImportResult> importProtected(Path file, char[] password) {

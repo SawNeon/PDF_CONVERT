@@ -11,14 +11,18 @@ import br.com.pdflocal.service.ImportResult;
 import br.com.pdflocal.service.OutputStep;
 import br.com.pdflocal.service.PageNumbersStep;
 import br.com.pdflocal.service.SaveResult;
+import br.com.pdflocal.service.PdfAStep;
+import br.com.pdflocal.service.PdfRepairer;
 import br.com.pdflocal.service.ProtectStep;
 import br.com.pdflocal.service.WatermarkStep;
 import br.com.pdflocal.util.AppSettings;
 import br.com.pdflocal.util.FileSizes;
 import br.com.pdflocal.util.Messages;
 import br.com.pdflocal.util.OutputNames;
+import br.com.pdflocal.util.PasswordProtectedException;
 import br.com.pdflocal.util.PdfLocalException;
 import br.com.pdflocal.util.SaveCancelledException;
+import br.com.pdflocal.util.WrongPasswordException;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -141,13 +145,16 @@ public final class MainView extends BorderPane implements AutoCloseable {
 
     private List<Tool> tools() {
         return List.of(
+                new Tool(ToolGroup.CONVERT_TO_PDF, "tool.images-to-pdf", this::addFiles, false),
                 new Tool(ToolGroup.OPTIMIZE, "toolbar.compress", this::compress, true),
+                new Tool(ToolGroup.OPTIMIZE, "tool.repair", this::repair, false),
                 new Tool(ToolGroup.EDIT, "tool.rotate.right", () -> rotateAll(90), true),
                 new Tool(ToolGroup.EDIT, "tool.rotate.left", () -> rotateAll(-90), true),
                 new Tool(ToolGroup.EDIT, "tool.numbers", this::pageNumbers, true),
                 new Tool(ToolGroup.EDIT, "tool.watermark", this::watermark, true),
                 new Tool(ToolGroup.EDIT, "tool.crop", this::crop, true),
                 new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.export-images", this::exportImages, true),
+                new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.pdfa", this::convertToPdfA, true),
                 new Tool(ToolGroup.SECURITY, "tool.protect", this::protect, true));
     }
 
@@ -244,6 +251,57 @@ public final class MainView extends BorderPane implements AutoCloseable {
             }
             startSaving(SaveJob.of("output.suffix.watermarked", new WatermarkStep(options)));
         });
+    }
+
+    private void convertToPdfA() {
+        if (busy || session.items().isEmpty() || !Dialogs.confirmPdfA(stage)) {
+            return;
+        }
+        startSaving(SaveJob.of("output.suffix.pdfa", new PdfAStep()));
+    }
+
+    private void repair() {
+        if (busy) {
+            return;
+        }
+        Path input = Dialogs.chooseFileToRepair(stage, lastDirectory);
+        if (input == null) {
+            return;
+        }
+        Path parent = input.toAbsolutePath().getParent();
+        if (parent != null) {
+            lastDirectory = parent;
+        }
+        Path name = input.getFileName();
+        String suggested = OutputNames.suggest(name == null ? "" : name.toString(), Messages.get("output.suffix.repaired"));
+        Path output = Dialogs.chooseOutput(stage, lastDirectory, suggested);
+        if (output != null) {
+            runRepair(input, output, null);
+        }
+    }
+
+    private void runRepair(Path input, Path output, char[] password) {
+        startBusy(Messages.get("status.repairing"));
+        session.repair(input, output, password)
+                .whenComplete((report, error) -> Platform.runLater(() -> finishRepair(input, output, report, error)));
+    }
+
+    private void finishRepair(Path input, Path output, PdfRepairer.Report report, Throwable error) {
+        endBusy();
+        if (error == null) {
+            notice = Messages.format("status.repaired", report.pagesRecovered(), report.pagesFound());
+            refreshState();
+            Dialogs.showRepairReport(stage, report);
+            return;
+        }
+        Throwable cause = causeOf(error);
+        if (cause instanceof PasswordProtectedException) {
+            Path name = input.getFileName();
+            PasswordDialog.show(stage, name == null ? "" : name.toString(), cause instanceof WrongPasswordException)
+                    .ifPresent(password -> runRepair(input, output, password));
+            return;
+        }
+        Dialogs.showError(stage, messageOf(error, Messages.FILE_UNREADABLE));
     }
 
     private void protect() {

@@ -1,6 +1,7 @@
 package br.com.pdflocal.ui;
 
 import br.com.pdflocal.service.ImportResult;
+import br.com.pdflocal.service.PdfRepairer;
 import br.com.pdflocal.util.AppInfo;
 import br.com.pdflocal.util.Messages;
 import java.io.File;
@@ -69,6 +70,49 @@ final class Dialogs {
         Path path = file.toPath();
         String name = path.getFileName().toString();
         return name.toLowerCase(Locale.ROOT).endsWith("." + extension) ? path : path.resolveSibling(name + "." + extension);
+    }
+
+    static Path chooseFileToRepair(Window owner, Path initialDirectory) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(Messages.get("dialog.repair.choose"));
+        chooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter(Messages.get("dialog.repair.filter"), "*.pdf"));
+        applyInitialDirectory(chooser, initialDirectory);
+        File file = chooser.showOpenDialog(owner);
+        return file == null ? null : file.toPath();
+    }
+
+    static void showRepairReport(Window owner, PdfRepairer.Report report) {
+        StringBuilder text = new StringBuilder(Messages.format("repair.summary", report.pagesRecovered(),
+                report.pagesFound()));
+        if (report.pagesLost() > 0) {
+            text.append("\n").append(Messages.format("repair.lost", report.pagesLost()));
+        }
+        if (report.pagesWithProblems() > 0) {
+            text.append("\n").append(Messages.format("repair.problems", report.pagesWithProblems()));
+        }
+        if (report.hadSignatures()) {
+            text.append("\n").append(Messages.get("repair.signed"));
+        }
+        text.append("\n\n").append(Messages.get("repair.note"));
+        Alert alert = new Alert(report.pagesLost() > 0 ? Alert.AlertType.WARNING : Alert.AlertType.INFORMATION,
+                text.toString());
+        alert.initOwner(owner);
+        Appearance.style(alert);
+        alert.setTitle(Messages.get("repair.title"));
+        alert.setHeaderText(null);
+        alert.showAndWait();
+    }
+
+    static boolean confirmPdfA(Window owner) {
+        ButtonType proceed = new ButtonType(Messages.get("pdfa.continue"), ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancel = new ButtonType(Messages.get("dialog.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, Messages.get("pdfa.message"), proceed, cancel);
+        alert.initOwner(owner);
+        Appearance.style(alert);
+        alert.setTitle(Messages.get("pdfa.title"));
+        alert.setHeaderText(null);
+        return alert.showAndWait().filter(button -> button == proceed).isPresent();
     }
 
     static boolean confirmClear(Window owner) {
