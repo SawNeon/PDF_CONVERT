@@ -7,6 +7,7 @@ import br.com.pdflocal.util.CorruptFileException;
 import br.com.pdflocal.util.PasswordProtectedException;
 import br.com.pdflocal.util.PdfLocalException;
 import br.com.pdflocal.util.UnsupportedFileException;
+import br.com.pdflocal.util.WrongPasswordException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collection;
@@ -34,11 +35,15 @@ public final class SourceRegistry implements AutoCloseable {
     private final FileTypeDetector detector = new FileTypeDetector();
 
     public SourceDocument open(Path file) throws PdfLocalException {
+        return open(file, null);
+    }
+
+    public SourceDocument open(Path file, char[] password) throws PdfLocalException {
         Objects.requireNonNull(file, "file");
         if (detector.detect(file) != FileType.PDF) {
             throw new UnsupportedFileException();
         }
-        PDDocument document = load(file);
+        PDDocument document = load(file, password);
         SourceDocument source = new SourceDocument(UUID.randomUUID(), file, document.getNumberOfPages(), hasSignature(document));
         entries.put(source.id(), new Entry(source, document, new ReentrantLock()));
         LOG.log(Level.INFO, "PDF opened with {0} pages", source.pageCount());
@@ -102,11 +107,13 @@ public final class SourceRegistry implements AutoCloseable {
         return entry;
     }
 
-    private static PDDocument load(Path file) throws PdfLocalException {
+    private static PDDocument load(Path file, char[] password) throws PdfLocalException {
+        boolean hasPassword = password != null && password.length > 0;
         try {
-            return Loader.loadPDF(file.toFile(), IOUtils.createTempFileOnlyStreamCache());
+            return Loader.loadPDF(file.toFile(), hasPassword ? new String(password) : "", null, null,
+                    IOUtils.createTempFileOnlyStreamCache());
         } catch (InvalidPasswordException e) {
-            throw new PasswordProtectedException(e);
+            throw hasPassword ? new WrongPasswordException(e) : new PasswordProtectedException(e);
         } catch (IOException | RuntimeException e) {
             LOG.log(Level.WARNING, "Failed to read PDF: {0}", e.getClass().getSimpleName());
             throw new CorruptFileException(e);

@@ -5,4 +5,8 @@ public class PasswordProtectedException extends PdfLocalException {
     public PasswordProtectedException(Throwable cause) {
         super(Messages.PDF_PASSWORD_PROTECTED, cause);
     }
+
+    protected PasswordProtectedException(String messageKey, Throwable cause) {
+        super(messageKey, cause);
+    }
 }

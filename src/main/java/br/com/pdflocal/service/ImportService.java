@@ -4,9 +4,12 @@ import br.com.pdflocal.model.FileType;
 import br.com.pdflocal.model.PageItem;
 import br.com.pdflocal.model.SourceDocument;
 import br.com.pdflocal.util.Messages;
+import br.com.pdflocal.util.PasswordProtectedException;
 import br.com.pdflocal.util.PdfLocalException;
+import br.com.pdflocal.util.WrongPasswordException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.logging.Level;
@@ -32,7 +35,7 @@ public final class ImportService {
             try {
                 items.addAll(importFile(file));
             } catch (PdfLocalException e) {
-                failures.add(new ImportResult.Failure(displayName(file), e.getMessage()));
+                failures.add(failure(file, e));
             } catch (RuntimeException e) {
                 LOG.log(Level.WARNING, "Unexpected import failure: {0}", e.getClass().getSimpleName());
                 failures.add(new ImportResult.Failure(displayName(file), Messages.get(Messages.UNEXPECTED)));
@@ -41,13 +44,40 @@ public final class ImportService {
         return new ImportResult(items, failures);
     }
 
+    public ImportResult importProtected(Path file, char[] password) {
+        Objects.requireNonNull(file, "file");
+        Objects.requireNonNull(password, "password");
+        try {
+            return new ImportResult(importFile(file, password), List.of());
+        } catch (PdfLocalException e) {
+            return new ImportResult(List.of(), List.of(failure(file, e)));
+        } catch (RuntimeException e) {
+            LOG.log(Level.WARNING, "Unexpected import failure: {0}", e.getClass().getSimpleName());
+            return new ImportResult(List.of(),
+                    List.of(new ImportResult.Failure(displayName(file), Messages.get(Messages.UNEXPECTED))));
+        } finally {
+            Arrays.fill(password, '\0');
+        }
+    }
+
+    private static ImportResult.Failure failure(Path file, PdfLocalException error) {
+        ImportResult.Reason reason = error instanceof WrongPasswordException ? ImportResult.Reason.PASSWORD_WRONG
+                : error instanceof PasswordProtectedException ? ImportResult.Reason.PASSWORD_REQUIRED
+                : ImportResult.Reason.OTHER;
+        return new ImportResult.Failure(displayName(file), error.getMessage(), file, reason);
+    }
+
     private List<PageItem> importFile(Path file) throws PdfLocalException {
+        return importFile(file, null);
+    }
+
+    private List<PageItem> importFile(Path file, char[] password) throws PdfLocalException {
         FileType type = detector.detect(file);
         if (type.isImage()) {
             return List.of(PageItem.image(file));
         }
 
-        SourceDocument source = registry.open(file);
+        SourceDocument source = registry.open(file, password);
         if (source.pageCount() == 0) {
             registry.close(source.id());
             throw new PdfLocalException(Messages.FILE_UNREADABLE);

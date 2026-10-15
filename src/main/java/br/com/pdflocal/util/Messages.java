@@ -18,6 +18,7 @@ public final class Messages {
     public static final String SAVE_DENIED = "error.save.denied";
     public static final String SAVE_NO_SPACE = "error.save.no-space";
     public static final String SAVE_FOLDER_MISSING = "error.save.folder-missing";
+    public static final String PDF_PASSWORD_WRONG = "error.pdf.password.wrong";
 
     private static final ResourceBundle BUNDLE = ResourceBundle.getBundle("messages", Locale.ROOT);
 
