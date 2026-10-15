@@ -62,6 +62,21 @@ A compressão age só nas **imagens** do PDF (escaneamentos e fotos), que são q
 Todo PDF gerado sai sem as **miniaturas embutidas** das páginas. Um PDF editado pode guardar a prévia do conteúdo antigo, e isso vazaria dado que o usuário já alterou. O PDF gerado também não herda título, autor e demais metadados dos arquivos de origem. A limpeza é feita só na cópia que está sendo montada.
 - Em testes com escaneamentos sintéticos de A4 a 300 dpi, a redução ficou entre 55% (Leve) e 90% (Forte). O resultado real depende dos seus documentos.
 
+## Ferramentas de edição
+
+O menu **Ferramentas** reúne as funções que atuam sobre a lista de páginas. Todas geram um PDF novo e nunca alteram os originais, e o nome sugerido para salvar já indica a operação.
+
+| Ferramenta | O que faz |
+|---|---|
+| Girar todas as páginas | Gira a lista inteira em 90 graus (dá para desfazer com Ctrl+Z) |
+| Inserir números de página | Posição (6 cantos), formato (`1`, `Página 1`, `Página 1 de 10`, `1 / 10`), número inicial, tamanho da letra e opção de pular a primeira página |
+| Inserir marca d'água | Texto (ex.: CONFIDENCIAL) ou imagem JPEG/PNG, no centro, com opacidade e opção diagonal |
+| Recortar PDF | Marque na página a área que será mantida; a mesma área vale para todas as páginas |
+
+- Números e marca d'água ficam no canto **visível** da página, mesmo em páginas giradas ou com área de corte.
+- O texto da marca e o formato do número usam fontes padrão do PDF; letras com acento funcionam, símbolos fora desse conjunto são recusados.
+- **Recortar tem dois modos.** *Remover o conteúdo de fora* (padrão) transforma a página em imagem e apaga de verdade o que ficou fora, mas o texto deixa de ser selecionável. *Apenas ocultar* mantém o texto, porém o conteúdo cortado continua dentro do arquivo e pode ser recuperado; não use em documentos com dados sensíveis.
+
 ## Identidade visual
 
 - **Cores:** tudo está em `src/main/resources/pdflocal.css`. A paleta fica no começo do arquivo (tema claro em `.root` e tema escuro em `.root.dark`), e o resto do CSS usa essas variáveis.
@@ -180,7 +195,8 @@ br.com.pdflocal
 ├── app        Launcher, PdfLocalApp
 ├── model      PageItem, SourceDocument, PageSize, PageOrder, PageEdits, UndoHistory, PageGroups
 ├── service    FileTypeDetector, SourceRegistry, ThumbnailService, DocumentComposer, OutputStep (passos de saída:
-│              CompressStep, StripThumbnailsStep), PdfCompressor, ImageResolutionFinder, ImageShare,
+│              CompressStep, StripThumbnailsStep, PageNumbersStep, WatermarkStep, CropStep),
+│              PdfCompressor, ImageResolutionFinder, ImageShare, PageGeometry, PageRasterizer,
 │              ImageToPageService, ImportService, ExifOrientation
 ├── ui         MainView, PageGrid, PageCard, PreviewPane, Toolbar (menu Ferramentas: Tool, ToolGroup),
 │              DocumentSession, Dialogs
