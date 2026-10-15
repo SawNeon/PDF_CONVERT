@@ -77,6 +77,15 @@ O menu **Ferramentas** reúne as funções que atuam sobre a lista de páginas. 
 - O texto da marca e o formato do número usam fontes padrão do PDF; letras com acento funcionam, símbolos fora desse conjunto são recusados.
 - **Recortar tem dois modos.** *Remover o conteúdo de fora* (padrão) transforma a página em imagem e apaga de verdade o que ficou fora, mas o texto deixa de ser selecionável. *Apenas ocultar* mantém o texto, porém o conteúdo cortado continua dentro do arquivo e pode ser recuperado; não use em documentos com dados sensíveis.
 
+## Converter PDF em imagens
+
+**Ferramentas, PDF para JPG ou PNG** exporta as páginas da lista como imagens: uma página gera um arquivo de imagem, várias páginas geram um **ZIP**. Girar, excluir e reordenar valem na exportação.
+
+- Formatos: JPG (menor, padrão) e PNG (sem perda). Resolução: 100, 150 (padrão), 200 ou 300 dpi.
+- A resolução é reduzida automaticamente em páginas muito grandes, para não esgotar a memória.
+- Os arquivos dentro do ZIP se chamam `pagina-001.jpg`, `pagina-002.jpg`... e nunca usam o nome do documento de origem.
+- A gravação é a mesma do PDF: arquivo temporário e troca atômica, cancelamento disponível, e nunca sobrescreve um arquivo de origem.
+
 ## Identidade visual
 
 - **Cores:** tudo está em `src/main/resources/pdflocal.css`. A paleta fica no começo do arquivo (tema claro em `.root` e tema escuro em `.root.dark`), e o resto do CSS usa essas variáveis.
@@ -196,7 +205,7 @@ br.com.pdflocal
 ├── model      PageItem, SourceDocument, PageSize, PageOrder, PageEdits, UndoHistory, PageGroups
 ├── service    FileTypeDetector, SourceRegistry, ThumbnailService, DocumentComposer, OutputStep (passos de saída:
 │              CompressStep, StripThumbnailsStep, PageNumbersStep, WatermarkStep, CropStep),
-│              PdfCompressor, ImageResolutionFinder, ImageShare, PageGeometry, PageRasterizer,
+│              PdfCompressor, ImageResolutionFinder, ImageShare, PageGeometry, PageRasterizer, PageExporter,
 │              ImageToPageService, ImportService, ExifOrientation
 ├── ui         MainView, PageGrid, PageCard, PreviewPane, Toolbar (menu Ferramentas: Tool, ToolGroup),
 │              DocumentSession, Dialogs
