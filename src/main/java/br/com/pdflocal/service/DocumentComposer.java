@@ -27,6 +27,15 @@ public final class DocumentComposer {
 
     private static final long LOW_SPACE_BYTES = 1024 * 1024;
 
+    public record Produced<T>(T value, long bytes) {
+    }
+
+    @FunctionalInterface
+    public interface OutputWork<T> {
+
+        T write(PDDocument document, Path temporary) throws IOException, SaveCancelledException;
+    }
+
     private static final Logger LOG = Logger.getLogger(DocumentComposer.class.getName());
 
     private static final OutputStep BASELINE_STEP = new StripThumbnailsStep();
@@ -53,12 +62,29 @@ public final class DocumentComposer {
     public SaveResult compose(List<PageItem> items, SourceRegistry registry, PageSize imagePageSize,
                               List<OutputStep> steps, Path output, SaveListener listener)
             throws PdfLocalException {
+        Objects.requireNonNull(steps, "steps");
+        Produced<Void> produced = produce(items, registry, imagePageSize, output, listener, (document, temporary) -> {
+            BASELINE_STEP.apply(document, listener);
+            for (OutputStep step : steps) {
+                throwIfCancelled(listener);
+                step.apply(document, listener);
+            }
+            throwIfCancelled(listener);
+            document.save(temporary.toFile());
+            return null;
+        });
+        LOG.log(Level.INFO, "PDF saved with {0} pages", items.size());
+        return new SaveResult(items.size(), produced.bytes(), compressionStats(steps));
+    }
+
+    public <T> Produced<T> produce(List<PageItem> items, SourceRegistry registry, PageSize imagePageSize, Path output,
+                                   SaveListener listener, OutputWork<T> work) throws PdfLocalException {
         Objects.requireNonNull(items, "items");
         Objects.requireNonNull(listener, "listener");
         Objects.requireNonNull(registry, "registry");
         Objects.requireNonNull(imagePageSize, "imagePageSize");
-        Objects.requireNonNull(steps, "steps");
         Objects.requireNonNull(output, "output");
+        Objects.requireNonNull(work, "work");
 
         validate(items, registry, output);
 
@@ -68,29 +94,23 @@ public final class DocumentComposer {
         try {
             temporary = Files.createTempFile(directory, "pdflocal-", ".tmp");
             locks = lockSources(items, registry);
-            try (PDDocument result = new PDDocument(IOUtils.createTempFileOnlyStreamCache())) {
+            T value;
+            try (PDDocument assembled = new PDDocument(IOUtils.createTempFileOnlyStreamCache())) {
                 int done = 0;
                 for (PageItem item : items) {
                     throwIfCancelled(listener);
-                    append(result, item, registry, imagePageSize);
+                    append(assembled, item, registry, imagePageSize);
                     listener.onPage(++done, items.size());
                 }
-                BASELINE_STEP.apply(result, listener);
-                for (OutputStep step : steps) {
-                    throwIfCancelled(listener);
-                    step.apply(result, listener);
-                }
-                throwIfCancelled(listener);
-                result.save(temporary.toFile());
+                value = work.write(assembled, temporary);
             }
             throwIfCancelled(listener);
             long outputBytes = Files.size(temporary);
             moveAtomically(temporary, output);
             temporary = null;
-            LOG.log(Level.INFO, "PDF saved with {0} pages", items.size());
-            return new SaveResult(items.size(), outputBytes, compressionStats(steps));
+            return new Produced<>(value, outputBytes);
         } catch (IOException | RuntimeException e) {
-            LOG.log(Level.WARNING, "Failed to save PDF: {0}", e.getClass().getSimpleName());
+            LOG.log(Level.WARNING, "Failed to write the output: {0}", e.getClass().getSimpleName());
             throw new PdfLocalException(classify(e, usableSpace(directory)), e);
         } finally {
             unlock(locks);
