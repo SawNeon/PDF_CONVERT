@@ -16,4 +16,7 @@ public interface SaveListener {
     void onPage(int done, int total);
 
     boolean isCancelled();
+
+    default void onCompress(int done, int total) {
+    }
 }

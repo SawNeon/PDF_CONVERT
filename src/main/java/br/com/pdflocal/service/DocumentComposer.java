@@ -1,5 +1,6 @@
 package br.com.pdflocal.service;
 
+import br.com.pdflocal.model.CompressionLevel;
 import br.com.pdflocal.model.PageItem;
 import br.com.pdflocal.model.PageSize;
 import br.com.pdflocal.util.Messages;
@@ -28,19 +29,35 @@ public final class DocumentComposer {
 
     private static final Logger LOG = Logger.getLogger(DocumentComposer.class.getName());
 
+    private static final OutputStep BASELINE_STEP = new StripThumbnailsStep();
+
     private final ImageToPageService imageService = new ImageToPageService();
 
-    public void compose(List<PageItem> items, SourceRegistry registry, PageSize imagePageSize, Path output)
+    public SaveResult compose(List<PageItem> items, SourceRegistry registry, PageSize imagePageSize, Path output)
             throws PdfLocalException {
-        compose(items, registry, imagePageSize, output, SaveListener.NONE);
+        return compose(items, registry, imagePageSize, CompressionLevel.NONE, output, SaveListener.NONE);
     }
 
-    public void compose(List<PageItem> items, SourceRegistry registry, PageSize imagePageSize, Path output,
-                        SaveListener listener) throws PdfLocalException {
+    public SaveResult compose(List<PageItem> items, SourceRegistry registry, PageSize imagePageSize, Path output,
+                              SaveListener listener) throws PdfLocalException {
+        return compose(items, registry, imagePageSize, CompressionLevel.NONE, output, listener);
+    }
+
+    public SaveResult compose(List<PageItem> items, SourceRegistry registry, PageSize imagePageSize,
+                              CompressionLevel compression, Path output, SaveListener listener)
+            throws PdfLocalException {
+        Objects.requireNonNull(compression, "compression");
+        return compose(items, registry, imagePageSize, List.of(new CompressStep(compression)), output, listener);
+    }
+
+    public SaveResult compose(List<PageItem> items, SourceRegistry registry, PageSize imagePageSize,
+                              List<OutputStep> steps, Path output, SaveListener listener)
+            throws PdfLocalException {
         Objects.requireNonNull(items, "items");
         Objects.requireNonNull(listener, "listener");
         Objects.requireNonNull(registry, "registry");
         Objects.requireNonNull(imagePageSize, "imagePageSize");
+        Objects.requireNonNull(steps, "steps");
         Objects.requireNonNull(output, "output");
 
         validate(items, registry, output);
@@ -58,13 +75,20 @@ public final class DocumentComposer {
                     append(result, item, registry, imagePageSize);
                     listener.onPage(++done, items.size());
                 }
+                BASELINE_STEP.apply(result, listener);
+                for (OutputStep step : steps) {
+                    throwIfCancelled(listener);
+                    step.apply(result, listener);
+                }
                 throwIfCancelled(listener);
                 result.save(temporary.toFile());
             }
             throwIfCancelled(listener);
+            long outputBytes = Files.size(temporary);
             moveAtomically(temporary, output);
             temporary = null;
             LOG.log(Level.INFO, "PDF saved with {0} pages", items.size());
+            return new SaveResult(items.size(), outputBytes, compressionStats(steps));
         } catch (IOException | RuntimeException e) {
             LOG.log(Level.WARNING, "Failed to save PDF: {0}", e.getClass().getSimpleName());
             throw new PdfLocalException(classify(e, usableSpace(directory)), e);
@@ -72,6 +96,14 @@ public final class DocumentComposer {
             unlock(locks);
             deleteQuietly(temporary);
         }
+    }
+
+    private static CompressionStats compressionStats(List<OutputStep> steps) {
+        return steps.stream()
+                .filter(CompressStep.class::isInstance)
+                .map(step -> ((CompressStep) step).stats())
+                .findFirst()
+                .orElse(CompressionStats.EMPTY);
     }
 
     static String classify(Exception error, long usableSpace) {

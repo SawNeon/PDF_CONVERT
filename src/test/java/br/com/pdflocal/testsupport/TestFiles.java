@@ -3,6 +3,7 @@ package br.com.pdflocal.testsupport;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -16,14 +17,20 @@ import java.util.List;
 import java.util.Random;
 import javax.imageio.ImageIO;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.PDResources;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.pdmodel.interactive.digitalsignature.PDSignature;
 import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.pdmodel.graphics.image.JPEGFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 
@@ -126,6 +133,159 @@ public final class TestFiles {
         Path file = directory.resolve(name);
         Files.write(file, result.toByteArray());
         return file;
+    }
+
+    public static BufferedImage syntheticScan(int width, int height, long seed, boolean gray) {
+        BufferedImage image = new BufferedImage(
+                width, height, gray ? BufferedImage.TYPE_BYTE_GRAY : BufferedImage.TYPE_3BYTE_BGR);
+        byte[] data = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
+        Random random = new Random(seed);
+        for (int i = 0; i < data.length; i++) {
+            data[i] = (byte) (240 + random.nextInt(11) - 5);
+        }
+        Graphics2D graphics = image.createGraphics();
+        graphics.setColor(new Color(30, 30, 30));
+        int margin = width / 14;
+        int line = Math.max(6, height / 160);
+        for (int y = height / 12; y < height - height / 12; y += line * 3) {
+            int x = margin;
+            while (x < width - margin) {
+                int length = line * (4 + random.nextInt(24));
+                graphics.fillRect(x, y, Math.min(length, width - margin - x), line);
+                x += length + line * 2;
+            }
+        }
+        graphics.dispose();
+        return image;
+    }
+
+    public static Path scannedPdf(Path directory, String name, int pages, int width, int height,
+                                  float jpegQuality, boolean gray) throws IOException {
+        Path file = directory.resolve(name);
+        try (PDDocument document = new PDDocument()) {
+            for (int i = 0; i < pages; i++) {
+                PDPage page = new PDPage(PDRectangle.A4);
+                document.addPage(page);
+                PDImageXObject image = JPEGFactory.createFromImage(
+                        document, syntheticScan(width, height, i + 1, gray), jpegQuality);
+                try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                    content.drawImage(image, 0, 0, PDRectangle.A4.getWidth(), PDRectangle.A4.getHeight());
+                }
+            }
+            document.save(file.toFile());
+        }
+        return file;
+    }
+
+    public static Path scannedPageWithText(Path directory, String name, String text, int width, int height,
+                                           float jpegQuality) throws IOException {
+        Path file = directory.resolve(name);
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            PDImageXObject image = JPEGFactory.createFromImage(
+                    document, syntheticScan(width, height, 7, false), jpegQuality);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.drawImage(image, 0, 0, PDRectangle.A4.getWidth(), PDRectangle.A4.getHeight());
+                content.beginText();
+                content.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 24);
+                content.newLineAtOffset(72, 700);
+                content.showText(text);
+                content.endText();
+            }
+            document.save(file.toFile());
+        }
+        return file;
+    }
+
+    public static Path sharedImagePdf(Path directory, String name, int width, int height) throws IOException {
+        Path file = directory.resolve(name);
+        try (PDDocument document = new PDDocument()) {
+            PDImageXObject image = JPEGFactory.createFromImage(document, syntheticScan(width, height, 3, false), 0.9f);
+            for (int i = 0; i < 2; i++) {
+                PDPage page = new PDPage(PDRectangle.A4);
+                document.addPage(page);
+                try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                    content.drawImage(image, 0, 0, PDRectangle.A4.getWidth(), PDRectangle.A4.getHeight());
+                }
+            }
+            document.save(file.toFile());
+        }
+        return file;
+    }
+
+    public static Path transparentImagePdf(Path directory, String name, int size) throws IOException {
+        BufferedImage argb = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = argb.createGraphics();
+        graphics.setColor(new Color(200, 30, 30, 255));
+        graphics.fillOval(0, 0, size, size);
+        graphics.setColor(new Color(30, 30, 200, 90));
+        graphics.fillRect(size / 4, size / 4, size / 2, size / 2);
+        graphics.dispose();
+        Path file = directory.resolve(name);
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            PDImageXObject image = LosslessFactory.createFromImage(document, argb);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.drawImage(image, 50, 200, 400, 400);
+            }
+            document.save(file.toFile());
+        }
+        return file;
+    }
+
+    public static Path noisyJpegPdf(Path directory, String name, int size, float jpegQuality) throws IOException {
+        Random random = new Random(11);
+        BufferedImage noise = new BufferedImage(size, size, BufferedImage.TYPE_3BYTE_BGR);
+        byte[] data = ((DataBufferByte) noise.getRaster().getDataBuffer()).getData();
+        random.nextBytes(data);
+        Path file = directory.resolve(name);
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            PDImageXObject image = JPEGFactory.createFromImage(document, noise, jpegQuality);
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.drawImage(image, 50, 200, 400, 400);
+            }
+            document.save(file.toFile());
+        }
+        return file;
+    }
+
+    public static Path largeNoisyPng(Path directory, String name, int width, int height) throws IOException {
+        Path file = directory.resolve(name);
+        ImageIO.write(syntheticScan(width, height, 5, false), "png", file.toFile());
+        return file;
+    }
+
+    public static List<PDImageXObject> imagesOf(PDDocument document) throws IOException {
+        List<PDImageXObject> images = new ArrayList<>();
+        for (PDPage page : document.getPages()) {
+            PDResources resources = page.getResources();
+            for (COSName name : resources.getXObjectNames()) {
+                if (resources.getXObject(name) instanceof PDImageXObject image) {
+                    images.add(image);
+                }
+            }
+        }
+        return images;
+    }
+
+    public static double meanDifference(BufferedImage a, BufferedImage b) {
+        int width = Math.min(a.getWidth(), b.getWidth());
+        int height = Math.min(a.getHeight(), b.getHeight());
+        long total = 0;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                Color first = new Color(a.getRGB(x, y));
+                Color second = new Color(b.getRGB(x, y));
+                total += Math.abs(first.getRed() - second.getRed())
+                        + Math.abs(first.getGreen() - second.getGreen())
+                        + Math.abs(first.getBlue() - second.getBlue());
+            }
+        }
+        return total / (3.0 * width * height);
     }
 
     public static BufferedImage render(Path pdf, int pageIndex) throws IOException {
