@@ -14,6 +14,7 @@ import br.com.pdflocal.service.SaveResult;
 import br.com.pdflocal.service.PdfAStep;
 import br.com.pdflocal.service.PdfRepairer;
 import br.com.pdflocal.service.ProtectStep;
+import br.com.pdflocal.service.RedactStep;
 import br.com.pdflocal.service.WatermarkStep;
 import br.com.pdflocal.util.AppSettings;
 import br.com.pdflocal.util.FileSizes;
@@ -155,6 +156,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
                 new Tool(ToolGroup.EDIT, "tool.crop", this::crop, true),
                 new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.export-images", this::exportImages, true),
                 new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.pdfa", this::convertToPdfA, true),
+                new Tool(ToolGroup.SECURITY, "tool.redact", this::redact, true),
                 new Tool(ToolGroup.SECURITY, "tool.protect", this::protect, true));
     }
 
@@ -251,6 +253,14 @@ public final class MainView extends BorderPane implements AutoCloseable {
             }
             startSaving(SaveJob.of("output.suffix.watermarked", new WatermarkStep(options)));
         });
+    }
+
+    private void redact() {
+        if (busy || session.items().isEmpty()) {
+            return;
+        }
+        RedactDialog.show(stage, session).ifPresent(areas ->
+                startSaving(SaveJob.of("output.suffix.redacted", new RedactStep(areas))));
     }
 
     private void convertToPdfA() {

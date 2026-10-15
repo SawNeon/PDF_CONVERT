@@ -4,9 +4,6 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.image.PixelReader;
-import javafx.scene.image.PixelWriter;
-import javafx.scene.image.WritableImage;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
@@ -48,7 +45,7 @@ final class RegionPickerPane extends Pane {
     }
 
     void show(Image image, int rotation) {
-        Image shown = rotated(image, rotation);
+        Image shown = ImageRotation.rotate(image, rotation);
         view.setImage(shown);
         if (shown != null && shown.getWidth() > 0 && shown.getHeight() > 0) {
             double scale = Math.min(maxWidth / shown.getWidth(), maxHeight / shown.getHeight());
@@ -101,32 +98,5 @@ final class RegionPickerPane extends Pane {
         region = NormalizedRegion.fromDrag(anchorX, anchorY, event.getX(), event.getY(), width, height);
         selection.setVisible(region != null);
         onChange.accept(Optional.ofNullable(region));
-    }
-
-    private static Image rotated(Image source, int rotation) {
-        if (source == null || Math.floorMod(rotation, 360) == 0) {
-            return source;
-        }
-        int width = (int) source.getWidth();
-        int height = (int) source.getHeight();
-        PixelReader reader = source.getPixelReader();
-        if (reader == null || width <= 0 || height <= 0) {
-            return source;
-        }
-        int[] pixels = new int[width * height];
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                pixels[y * width + x] = reader.getArgb(x, y);
-            }
-        }
-        PixelRotation.Rotated result = PixelRotation.rotate(pixels, width, height, rotation);
-        WritableImage image = new WritableImage(result.width(), result.height());
-        PixelWriter writer = image.getPixelWriter();
-        for (int y = 0; y < result.height(); y++) {
-            for (int x = 0; x < result.width(); x++) {
-                writer.setArgb(x, y, result.pixels()[y * result.width() + x]);
-            }
-        }
-        return image;
     }
 }
