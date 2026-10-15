@@ -11,6 +11,7 @@ import br.com.pdflocal.service.ImportResult;
 import br.com.pdflocal.service.OutputStep;
 import br.com.pdflocal.service.PageNumbersStep;
 import br.com.pdflocal.service.SaveResult;
+import br.com.pdflocal.service.ProtectStep;
 import br.com.pdflocal.service.WatermarkStep;
 import br.com.pdflocal.util.AppSettings;
 import br.com.pdflocal.util.FileSizes;
@@ -20,7 +21,12 @@ import br.com.pdflocal.util.PdfLocalException;
 import br.com.pdflocal.util.SaveCancelledException;
 import java.io.File;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Deque;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -58,6 +64,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
     private final Label developerCredit = new Label(Messages.get("app.developer"));
 
     private DocumentSession.SaveOperation saving;
+    private final Deque<ImportResult.Failure> passwordQueue = new ArrayDeque<>();
     private SaveJob savingJob = SaveJob.PLAIN;
     private boolean cancelRequested;
     private boolean busy;
@@ -140,7 +147,8 @@ public final class MainView extends BorderPane implements AutoCloseable {
                 new Tool(ToolGroup.EDIT, "tool.numbers", this::pageNumbers, true),
                 new Tool(ToolGroup.EDIT, "tool.watermark", this::watermark, true),
                 new Tool(ToolGroup.EDIT, "tool.crop", this::crop, true),
-                new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.export-images", this::exportImages, true));
+                new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.export-images", this::exportImages, true),
+                new Tool(ToolGroup.SECURITY, "tool.protect", this::protect, true));
     }
 
     public void importFiles(List<Path> files) {
@@ -236,6 +244,33 @@ public final class MainView extends BorderPane implements AutoCloseable {
             }
             startSaving(SaveJob.of("output.suffix.watermarked", new WatermarkStep(options)));
         });
+    }
+
+    private void protect() {
+        if (busy || session.items().isEmpty()) {
+            return;
+        }
+        ProtectDialog.show(stage).ifPresent(password -> {
+            SaveJob job = SaveJob.of("output.suffix.protected", new ProtectStep(password));
+            Arrays.fill(password, '\0');
+            startSaving(job);
+        });
+    }
+
+    private void askNextPassword() {
+        ImportResult.Failure failure = passwordQueue.poll();
+        if (failure == null) {
+            return;
+        }
+        boolean retry = failure.reason() == ImportResult.Reason.PASSWORD_WRONG;
+        Optional<char[]> password = PasswordDialog.show(stage, failure.fileName(), retry);
+        if (password.isEmpty()) {
+            askNextPassword();
+            return;
+        }
+        startBusy(Messages.get("status.importing"));
+        session.importProtected(failure.file(), password.get())
+                .whenComplete((result, error) -> Platform.runLater(() -> finishImport(result, error)));
     }
 
     private void exportImages() {
@@ -400,9 +435,18 @@ public final class MainView extends BorderPane implements AutoCloseable {
             return;
         }
         session.append(result.items());
-        if (!result.failures().isEmpty()) {
-            Dialogs.showImportFailures(stage, result.failures());
+        List<ImportResult.Failure> others = new ArrayList<>();
+        for (ImportResult.Failure failure : result.failures()) {
+            if (failure.needsPassword()) {
+                passwordQueue.add(failure);
+            } else {
+                others.add(failure);
+            }
         }
+        if (!others.isEmpty()) {
+            Dialogs.showImportFailures(stage, others);
+        }
+        askNextPassword();
     }
 
     private void onKeyPressed(KeyEvent event) {

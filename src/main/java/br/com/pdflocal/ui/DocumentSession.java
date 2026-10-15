@@ -77,6 +77,10 @@ final class DocumentSession implements AutoCloseable {
         return CompletableFuture.supplyAsync(() -> importer.importFiles(selected), background);
     }
 
+    CompletableFuture<ImportResult> importProtected(Path file, char[] password) {
+        return CompletableFuture.supplyAsync(() -> importer.importProtected(file, password), background);
+    }
+
     void append(List<PageItem> newItems) {
         newItems.stream().filter(item -> !item.isImage()).map(PageItem::sourceId).forEach(knownSources::add);
         items.addAll(newItems);

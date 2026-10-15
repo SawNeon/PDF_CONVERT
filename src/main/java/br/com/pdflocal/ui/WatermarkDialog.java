@@ -10,6 +10,7 @@ import javafx.beans.binding.Bindings;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
@@ -23,6 +24,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
@@ -82,18 +84,18 @@ final class WatermarkDialog {
         VBox textBox = new VBox(6, text, textProblem);
         HBox imageBox = new HBox(10, choose, imageName);
         textBox.visibleProperty().bind(textMode.selectedProperty());
-        textBox.managedProperty().bind(textMode.selectedProperty());
         imageBox.visibleProperty().bind(imageMode.selectedProperty());
-        imageBox.managedProperty().bind(imageMode.selectedProperty());
+        imageBox.setAlignment(Pos.TOP_LEFT);
+        StackPane source = new StackPane(textBox, imageBox);
+        source.setAlignment(Pos.TOP_LEFT);
         textProblem.visibleProperty().bind(Bindings.createBooleanBinding(
                 () -> !text.getText().isBlank() && !StandardText.canEncode(text.getText()), text.textProperty()));
-        textProblem.managedProperty().bind(textProblem.visibleProperty());
 
         Label intro = new Label(Messages.get("watermark.intro"));
         intro.setWrapText(true);
         intro.setMaxWidth(WIDTH - 16);
         intro.getStyleClass().add("dialog-intro");
-        VBox content = new VBox(12, intro, new HBox(16, textMode, imageMode), textBox, imageBox, opacityLabel, opacity,
+        VBox content = new VBox(12, intro, new HBox(16, textMode, imageMode), source, opacityLabel, opacity,
                 diagonal);
         content.setPadding(new Insets(8));
         content.setPrefWidth(WIDTH);
