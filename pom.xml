@@ -18,6 +18,7 @@
 
         <javafx.version>21.0.12</javafx.version>
         <pdfbox.version>3.0.8</pdfbox.version>
+        <test.excluded.groups>office</test.excluded.groups>
         <atlantafx.version>2.1.0</atlantafx.version>
         <metadata-extractor.version>2.21.0</metadata-extractor.version>
         <junit.version>5.14.4</junit.version>
@@ -82,6 +83,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${surefire-plugin.version}</version>
+                <configuration>
+                    <excludedGroups>${test.excluded.groups}</excludedGroups>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.openjfx</groupId>

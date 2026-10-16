@@ -36,6 +36,23 @@ final class OutputFiles {
         }
     }
 
+    static void deleteTree(Path root) {
+        if (root == null || !Files.exists(root)) {
+            return;
+        }
+        try (var walk = Files.walk(root)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException e) {
+                    LOG.log(Level.WARNING, "Failed to delete temporary item: {0}", e.getClass().getSimpleName());
+                }
+            });
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Failed to clean temporary folder: {0}", e.getClass().getSimpleName());
+        }
+    }
+
     static long usableSpace(Path directory) {
         try {
             return Files.getFileStore(directory).getUsableSpace();

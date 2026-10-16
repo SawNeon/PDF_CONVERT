@@ -22,6 +22,13 @@ public final class Messages {
     public static final String FORM_MISSING = "error.form.missing";
     public static final String FORM_XFA = "error.form.xfa";
     public static final String FORM_VALUE_INVALID = "error.form.value";
+    public static final String CONVERT_UNSUPPORTED = "error.convert.unsupported";
+    public static final String CONVERT_MACROS = "error.convert.macros";
+    public static final String CONVERT_FAILED = "error.convert.failed";
+    public static final String CONVERT_NO_ENGINE = "error.convert.no-engine";
+    public static final String CONVERT_APP_RUNNING = "error.convert.app-running";
+    public static final String CONVERT_TIMEOUT = "error.convert.timeout";
+    public static final String CONVERT_UNSUPPORTED_HTML = "error.convert.html";
 
     private static final ResourceBundle BUNDLE = ResourceBundle.getBundle("messages", Locale.ROOT);
 
