@@ -22,6 +22,7 @@ import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import org.apache.pdfbox.pdmodel.PDDocument;
 
 public final class PdfToOffice {
 
@@ -64,6 +65,32 @@ public final class PdfToOffice {
             finish(produced, output, OfficeKind.WORD);
             LOG.log(Level.INFO, "PDF converted to Word with LibreOffice");
             return OfficeConverter.Engine.LIBREOFFICE;
+        } catch (IOException e) {
+            throw failure(e, directory);
+        } finally {
+            OutputFiles.deleteTree(work);
+        }
+    }
+
+    public void toExcel(List<PageItem> items, SourceRegistry registry, PageSize imagePageSize, Path output,
+                        SaveListener listener) throws PdfLocalException, SaveCancelledException {
+        Path directory = requireFolder(output);
+        Path work = null;
+        try {
+            work = Files.createTempDirectory(directory, "pdflocal-");
+            Path assembled = work.resolve("entrada.pdf");
+            composer.compose(items, registry, imagePageSize, List.of(), assembled, listener);
+            List<XlsxWriter.Sheet> sheets;
+            try (PDDocument document = PdfLoader.open(assembled, null)) {
+                sheets = new TableExtractor().extract(document, listener);
+            }
+            if (sheets.isEmpty()) {
+                throw new PdfLocalException(Messages.CONVERT_NO_TEXT);
+            }
+            Path produced = work.resolve("saida.xlsx");
+            XlsxWriter.write(produced, sheets);
+            finish(produced, output, OfficeKind.EXCEL);
+            LOG.log(Level.INFO, "PDF converted to Excel with {0} sheets", sheets.size());
         } catch (IOException e) {
             throw failure(e, directory);
         } finally {

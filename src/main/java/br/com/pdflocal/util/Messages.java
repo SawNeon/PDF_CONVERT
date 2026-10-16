@@ -29,6 +29,7 @@ public final class Messages {
     public static final String CONVERT_APP_RUNNING = "error.convert.app-running";
     public static final String CONVERT_TIMEOUT = "error.convert.timeout";
     public static final String CONVERT_UNSUPPORTED_HTML = "error.convert.html";
+    public static final String CONVERT_NO_TEXT = "error.convert.no-text";
 
     private static final ResourceBundle BUNDLE = ResourceBundle.getBundle("messages", Locale.ROOT);
 
