@@ -8,11 +8,16 @@ import br.com.pdflocal.service.CompressStep;
 import br.com.pdflocal.service.CropStep;
 import br.com.pdflocal.service.FileTypeDetector;
 import br.com.pdflocal.service.FormFiller;
+import br.com.pdflocal.service.HtmlConverter;
 import br.com.pdflocal.service.ImportResult;
+import br.com.pdflocal.service.OfficeConverter;
 import br.com.pdflocal.service.OutputStep;
 import br.com.pdflocal.service.PageNumbersStep;
+import br.com.pdflocal.service.SaveListener;
 import br.com.pdflocal.service.SaveResult;
+import br.com.pdflocal.service.SourceRegistry;
 import br.com.pdflocal.service.PdfAStep;
+import br.com.pdflocal.service.PdfToOffice;
 import br.com.pdflocal.service.PdfRepairer;
 import br.com.pdflocal.service.ProtectStep;
 import br.com.pdflocal.service.RedactStep;
@@ -70,6 +75,9 @@ public final class MainView extends BorderPane implements AutoCloseable {
     private final Label developerCredit = new Label(Messages.get("app.developer"));
 
     private DocumentSession.SaveOperation saving;
+    private final OfficeConverter officeConverter = new OfficeConverter();
+    private final HtmlConverter htmlConverter = new HtmlConverter();
+    private final PdfToOffice pdfToOffice = new PdfToOffice();
     private final Deque<ImportResult.Failure> passwordQueue = new ArrayDeque<>();
     private SaveJob savingJob = SaveJob.PLAIN;
     private boolean cancelRequested;
@@ -148,6 +156,13 @@ public final class MainView extends BorderPane implements AutoCloseable {
     private List<Tool> tools() {
         return List.of(
                 new Tool(ToolGroup.CONVERT_TO_PDF, "tool.images-to-pdf", this::addFiles, false),
+                new Tool(ToolGroup.CONVERT_TO_PDF, "tool.word-to-pdf", () -> convertOffice("word",
+                        "*.doc", "*.docx", "*.rtf", "*.odt"), false),
+                new Tool(ToolGroup.CONVERT_TO_PDF, "tool.excel-to-pdf", () -> convertOffice("excel",
+                        "*.xls", "*.xlsx"), false),
+                new Tool(ToolGroup.CONVERT_TO_PDF, "tool.powerpoint-to-pdf", () -> convertOffice("powerpoint",
+                        "*.ppt", "*.pptx"), false),
+                new Tool(ToolGroup.CONVERT_TO_PDF, "tool.html-to-pdf", this::convertHtml, false),
                 new Tool(ToolGroup.OPTIMIZE, "toolbar.compress", this::compress, true),
                 new Tool(ToolGroup.OPTIMIZE, "tool.repair", this::repair, false),
                 new Tool(ToolGroup.EDIT, "tool.rotate.right", () -> rotateAll(90), true),
@@ -158,6 +173,8 @@ public final class MainView extends BorderPane implements AutoCloseable {
                 new Tool(ToolGroup.EDIT, "tool.form", this::fillForm, false),
                 new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.export-images", this::exportImages, true),
                 new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.pdfa", this::convertToPdfA, true),
+                new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.pdf-to-word", this::pdfToWord, true),
+                new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.pdf-to-powerpoint", this::pdfToPowerPoint, true),
                 new Tool(ToolGroup.SECURITY, "tool.redact", this::redact, true),
                 new Tool(ToolGroup.SECURITY, "tool.protect", this::protect, true));
     }
@@ -346,6 +363,109 @@ public final class MainView extends BorderPane implements AutoCloseable {
     private static void wipe(char[] password) {
         if (password != null) {
             Arrays.fill(password, '\0');
+        }
+    }
+
+    private void convertOffice(String kind, String... patterns) {
+        if (busy) {
+            return;
+        }
+        Path input = Dialogs.chooseDocument(stage, lastDirectory, "dialog.convert." + kind,
+                "dialog.convert.filter." + kind, patterns);
+        if (input == null) {
+            return;
+        }
+        convertFile(input, "pdf", (output, listener) -> officeConverter.convert(input, output, listener));
+    }
+
+    private void convertHtml() {
+        if (busy) {
+            return;
+        }
+        Path input = Dialogs.chooseDocument(stage, lastDirectory, "dialog.convert.html",
+                "dialog.convert.filter.html", "*.html", "*.htm");
+        if (input == null) {
+            return;
+        }
+        convertFile(input, "pdf", (output, listener) -> htmlConverter.convert(input, output, listener));
+    }
+
+    @FunctionalInterface
+    private interface FileConversion {
+
+        void run(Path output, SaveListener listener) throws PdfLocalException, SaveCancelledException;
+    }
+
+    private void convertFile(Path input, String extension, FileConversion conversion) {
+        rememberDirectoryOf(input);
+        Path name = input.getFileName();
+        Path output = Dialogs.chooseConvertedOutput(stage, lastDirectory,
+                OutputNames.suggest(name == null ? "" : name.toString(), "", extension), extension);
+        if (output == null) {
+            return;
+        }
+        rememberDirectoryOf(output);
+        beginConversion(() -> session.startConversion(output, listener -> conversion.run(output, listener)));
+    }
+
+    private void pdfToWord() {
+        listConversion("docx", (items, registry, output, listener) ->
+                pdfToOffice.toWord(items, registry, toolbar.pageSize(), output, listener));
+    }
+
+    private void pdfToPowerPoint() {
+        listConversion("pptx", (items, registry, output, listener) ->
+                pdfToOffice.toPowerPoint(items, registry, toolbar.pageSize(), output, listener));
+    }
+
+    @FunctionalInterface
+    private interface ListConversion {
+
+        void run(List<PageItem> items, SourceRegistry registry, Path output, SaveListener listener)
+                throws PdfLocalException, SaveCancelledException;
+    }
+
+    private void listConversion(String extension, ListConversion conversion) {
+        if (busy || session.items().isEmpty()) {
+            return;
+        }
+        String suggested = OutputNames.suggest(session.displayName(session.items().get(0)), "", extension);
+        Path output = Dialogs.chooseConvertedOutput(stage, lastDirectory, suggested, extension);
+        if (output == null) {
+            return;
+        }
+        rememberDirectoryOf(output);
+        beginConversion(() -> session.startListConversion(output,
+                (items, registry, listener) -> conversion.run(items, registry, output, listener)));
+    }
+
+    private void beginConversion(java.util.function.Supplier<DocumentSession.SaveOperation> starter) {
+        startBusy(Messages.get("status.converting"));
+        grid.setEditable(false);
+        cancelRequested = false;
+        saving = starter.get();
+        refreshState();
+        saving.result().whenComplete((result, error) -> Platform.runLater(() -> finishConversion(result, error)));
+    }
+
+    private void finishConversion(SaveResult result, Throwable error) {
+        saving = null;
+        grid.setEditable(true);
+        endBusy();
+        if (error == null) {
+            notice = Messages.format("status.converted", FileSizes.format(result.outputBytes()));
+        } else if (causeOf(error) instanceof SaveCancelledException) {
+            notice = Messages.get(Messages.SAVE_CANCELLED);
+        } else {
+            Dialogs.showError(stage, messageOf(error, Messages.CONVERT_FAILED));
+        }
+        refreshState();
+    }
+
+    private void rememberDirectoryOf(Path file) {
+        Path parent = file.toAbsolutePath().getParent();
+        if (parent != null) {
+            lastDirectory = parent;
         }
     }
 

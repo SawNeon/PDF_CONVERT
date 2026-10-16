@@ -9,6 +9,7 @@ import br.com.pdflocal.model.PageSize;
 import br.com.pdflocal.model.SourceDocument;
 import br.com.pdflocal.model.UndoHistory;
 import br.com.pdflocal.service.CompressStep;
+import br.com.pdflocal.service.CompressionStats;
 import br.com.pdflocal.service.DocumentComposer;
 import br.com.pdflocal.service.FormFiller;
 import br.com.pdflocal.service.ImageShare;
@@ -22,6 +23,7 @@ import br.com.pdflocal.service.SaveResult;
 import br.com.pdflocal.service.SourceRegistry;
 import br.com.pdflocal.service.ThumbnailService;
 import br.com.pdflocal.util.PdfLocalException;
+import br.com.pdflocal.util.SaveCancelledException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -80,6 +82,43 @@ final class DocumentSession implements AutoCloseable {
     CompletableFuture<ImportResult> importFiles(List<Path> files) {
         List<Path> selected = List.copyOf(files);
         return CompletableFuture.supplyAsync(() -> importer.importFiles(selected), background);
+    }
+
+    @FunctionalInterface
+    interface FileTask {
+
+        void run(SaveListener listener) throws PdfLocalException, SaveCancelledException;
+    }
+
+    @FunctionalInterface
+    interface ListTask {
+
+        void run(List<PageItem> items, SourceRegistry registry, SaveListener listener)
+                throws PdfLocalException, SaveCancelledException;
+    }
+
+    SaveOperation startConversion(Path output, FileTask task) {
+        return startTask(output, listener -> task.run(listener));
+    }
+
+    SaveOperation startListConversion(Path output, ListTask task) {
+        List<PageItem> snapshot = List.copyOf(items);
+        return startTask(output, listener -> task.run(snapshot, registry, listener));
+    }
+
+    private SaveOperation startTask(Path output, FileTask task) {
+        AtomicBoolean cancelled = new AtomicBoolean();
+        SaveListener listener = listener(cancelled, (done, total) -> { }, (done, total) -> { });
+        CompletableFuture<SaveResult> result = CompletableFuture.supplyAsync(() -> {
+            try {
+                task.run(listener);
+                long bytes = Files.exists(output) ? Files.size(output) : 0;
+                return new SaveResult(1, bytes, CompressionStats.EMPTY);
+            } catch (PdfLocalException | IOException e) {
+                throw new CompletionException(e);
+            }
+        }, background);
+        return new SaveOperation(result, () -> cancelled.set(true));
     }
 
     CompletableFuture<FormFiller.FormInfo> inspectForm(Path input, char[] password) {

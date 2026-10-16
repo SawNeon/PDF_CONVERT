@@ -115,6 +115,22 @@ final class Dialogs {
         return alert.showAndWait().filter(button -> button == proceed).isPresent();
     }
 
+    static Path chooseDocument(Window owner, Path initialDirectory, String titleKey, String filterKey,
+                               String... patterns) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle(Messages.get(titleKey));
+        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(Messages.get(filterKey), patterns));
+        applyInitialDirectory(chooser, initialDirectory);
+        File file = chooser.showOpenDialog(owner);
+        return file == null ? null : file.toPath();
+    }
+
+    static Path chooseConvertedOutput(Window owner, Path initialDirectory, String suggestedName, String extension) {
+        String filterKey = "pdf".equals(extension) ? "dialog.save.filter" : "dialog.convert.save.filter." + extension;
+        return chooseFile(owner, initialDirectory, suggestedName, Messages.get("dialog.convert.save.title"),
+                Messages.get(filterKey), extension);
+    }
+
     static boolean confirmClear(Window owner) {
         ButtonType confirm = new ButtonType(Messages.get("dialog.clear.confirm"), ButtonBar.ButtonData.OK_DONE);
         ButtonType cancel = new ButtonType(Messages.get("dialog.cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
