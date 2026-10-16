@@ -111,6 +111,7 @@ O menu **Ferramentas** reúne as funções que atuam sobre a lista de páginas. 
 | Word, Excel e PowerPoint para PDF | Usa o Office instalado (automação do Windows) ou, se ele não puder ser usado, o LibreOffice |
 | HTML para PDF | Usa o Edge (ou o Chrome) em modo sem janela |
 | PDF para Word | Usa o LibreOffice; o resultado é editável, mas o layout fica aproximado |
+| PDF para Excel | Detecta tabelas no texto do PDF e grava uma planilha (`.xlsx`), uma aba por página; não usa programa externo |
 | PDF para PowerPoint | Cada página vira um slide com a imagem da página (não editável); exige o PowerPoint |
 
 Nada disso usa biblioteca nova: o aplicativo só chama programas que já existem na máquina.
@@ -133,7 +134,15 @@ Nada disso usa biblioteca nova: o aplicativo só chama programas que já existem
 
 **Decisão pendente: PDF para Word com o próprio Word.** O Word abre PDF mostrando um aviso de conversão que, em segundo plano, ninguém consegue responder, e a conversão trava. Silenciar o aviso exige alterar uma opção do Word no registro do usuário. O aplicativo **não** faz isso sem autorização, e por isso usa o LibreOffice.
 
-**Fora do escopo:** PDF para Excel (não existe extração confiável de tabelas sem biblioteca externa) e OCR (dispensado pela equipe).
+**PDF para Excel (versão simples)**
+- Lê o **texto selecionável** do PDF e detecta tabelas pelo layout: colunas são bordas (esquerda ou, para números, direita) compartilhadas por vários blocos curtos; linhas são blocos na mesma altura; uma tabela precisa de 3 ou mais colunas (ou 2 colunas com 3 linhas). Parágrafos nunca viram tabela, e o texto fora das tabelas entra como linhas de uma célula, na ordem da página.
+- Uma aba por página. Células mescladas não são recriadas.
+- **Números só são convertidos quando não há dúvida** (`1.234,56`, `12,5`, inteiros curtos). CPF, telefone, matrícula, códigos com zero à esquerda e datas ficam como texto. Nada é gravado como fórmula, e caracteres inválidos em XML são removidos.
+- **PDF escaneado** não tem texto: o aplicativo avisa e não gera planilha, porque o OCR foi dispensado.
+- É uma heurística. Funciona bem em relatórios, extratos e listagens gerados por sistema; tabelas sem espaço claro entre as colunas, com texto em várias linhas por célula ou com layout muito irregular podem sair imperfeitas, então confira o resultado.
+- A ideia do algoritmo de detecção de tabelas vem do projeto PdfCraft (licença MIT ou Apache-2.0), reescrita em Java para PDFBox, sem copiar código. O PdfCraft ainda não exporta Excel.
+
+**Fora do escopo:** OCR (dispensado pela equipe).
 
 **Testes que abrem programas de verdade** (Word, Excel, PowerPoint, LibreOffice, Edge) ficam fora do `mvn test` padrão, porque são lentos. Para rodá-los, com esses programas fechados:
 
@@ -262,7 +271,7 @@ br.com.pdflocal
 │              CompressStep, StripThumbnailsStep, PageNumbersStep, WatermarkStep, CropStep),
 │              PdfCompressor, ImageResolutionFinder, ImageShare, PageGeometry, PageRasterizer, PageExporter,
 │              ProtectStep, PdfAStep, PdfRepairer, RedactStep, FormFiller, PdfLoader, OfficeConverter, HtmlConverter,
-│              PdfToOffice, OfficeRunner, LibreOfficeRunner,
+│              PdfToOffice, OfficeRunner, LibreOfficeRunner, TableExtractor, XlsxWriter, CellValues,
 │              ImageToPageService, ImportService, ExifOrientation
 ├── ui         MainView, PageGrid, PageCard, PreviewPane, Toolbar (menu Ferramentas: Tool, ToolGroup),
 │              DocumentSession, Dialogs
