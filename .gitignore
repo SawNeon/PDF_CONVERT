@@ -34,3 +34,8 @@ desktop.ini
 
 # Logs
 *.log
+
+# Dumps de memoria podem conter dados sensiveis
+*.dmp
+*.mdmp
+hs_err_pid*.log
