@@ -104,6 +104,43 @@ O menu **Ferramentas** reúne as funções que atuam sobre a lista de páginas. 
 - **Reparar não faz milagre.** Recupera arquivos com tabela de referências quebrada, final cortado ou lixo antes do cabeçalho. Conteúdo realmente destruído não volta, e as páginas que não puderem ser lidas são contadas como perdidas no relatório. Assinaturas digitais não são mantidas na cópia.
 - Ao gravar PDF/A o aplicativo usa a estrutura clássica do PDF (sem fluxos de referência cruzada), exigida pelo PDF/A-1.
 
+## Conversões com Office, LibreOffice e navegador
+
+| Ferramenta | Como funciona |
+|---|---|
+| Word, Excel e PowerPoint para PDF | Usa o Office instalado (automação do Windows) ou, se ele não puder ser usado, o LibreOffice |
+| HTML para PDF | Usa o Edge (ou o Chrome) em modo sem janela |
+| PDF para Word | Usa o LibreOffice; o resultado é editável, mas o layout fica aproximado |
+| PDF para PowerPoint | Cada página vira um slide com a imagem da página (não editável); exige o PowerPoint |
+
+Nada disso usa biblioteca nova: o aplicativo só chama programas que já existem na máquina.
+
+**Regras de segurança**
+- Os arquivos são validados pelo **conteúdo**, não pela extensão. Arquivos com **macros** são recusados.
+- O Office abre o arquivo somente para leitura, com macros desligadas, sem atualizar vínculos externos e sem pedir senha: um arquivo protegido falha com mensagem, em vez de travar.
+- **Programa do Office já aberto não é automatizado.** O Excel e o PowerPoint só têm uma instância, e conectar-se a ela poderia mexer ou fechar o trabalho da pessoa. Nesse caso o aplicativo usa o LibreOffice, se houver, ou pede para fechar o programa.
+- Se a conversão estourar o tempo (5 minutos) ou for cancelada, o aplicativo encerra apenas as instâncias do Office **sem janela** que ele mesmo iniciou, nunca as que têm janela.
+- Os caminhos seguem por variáveis de ambiente (nunca montados no texto do comando) e o script do PowerShell vai por `-EncodedCommand`, que não depende da política de execução de scripts.
+
+**Rede**
+- O LibreOffice 25 tenta verificar atualização na internet por conta própria e a configuração do perfil não o impede. Por isso o aplicativo o executa com proxy apontando para uma porta local fechada: nos testes, as tentativas chegaram a um ouvinte local e **nada saiu para a internet**.
+- O HTML é impresso com uma política de conteúdo (`script-src 'none'`) inserida numa cópia temporária, **sem JavaScript**, com DNS bloqueado e proxy morto (inclusive para endereços locais). Um teste automático confirma que o navegador não faz nenhuma conexão a servidor algum. O próprio Edge tenta falar com a rede dele (sincronização, atualização de componentes) e isso também é bloqueado pelo proxy.
+- Limite: Word, Excel e PowerPoint são programas da empresa e podem ter comunicação própria (conteúdo vinculado, serviços conectados). Isso está fora do controle do aplicativo.
+
+**LibreOffice**
+- O perfil dele fica numa pasta **curta e fixa**: `%LOCALAPPDATA%\PdfLocal\lo`. Caminhos longos (acima de 260 caracteres no total) fazem o LibreOffice fechar com erro logo na abertura, e a pasta fixa também evita recriar o perfil, que é lento na primeira vez.
+- O perfil nasce com macros desligadas, vínculos de documento nunca atualizados e lista de arquivos recentes desligada. Se a conversão falhar, o perfil é recriado e há uma segunda tentativa.
+
+**Decisão pendente: PDF para Word com o próprio Word.** O Word abre PDF mostrando um aviso de conversão que, em segundo plano, ninguém consegue responder, e a conversão trava. Silenciar o aviso exige alterar uma opção do Word no registro do usuário. O aplicativo **não** faz isso sem autorização, e por isso usa o LibreOffice.
+
+**Fora do escopo:** PDF para Excel (não existe extração confiável de tabelas sem biblioteca externa) e OCR (dispensado pela equipe).
+
+**Testes que abrem programas de verdade** (Word, Excel, PowerPoint, LibreOffice, Edge) ficam fora do `mvn test` padrão, porque são lentos. Para rodá-los, com esses programas fechados:
+
+```
+mvn test -Dtest.excluded.groups=none
+```
+
 ## Identidade visual
 
 - **Cores:** tudo está em `src/main/resources/pdflocal.css`. A paleta fica no começo do arquivo (tema claro em `.root` e tema escuro em `.root.dark`), e o resto do CSS usa essas variáveis.
@@ -224,7 +261,8 @@ br.com.pdflocal
 ├── service    FileTypeDetector, SourceRegistry, ThumbnailService, DocumentComposer, OutputStep (passos de saída:
 │              CompressStep, StripThumbnailsStep, PageNumbersStep, WatermarkStep, CropStep),
 │              PdfCompressor, ImageResolutionFinder, ImageShare, PageGeometry, PageRasterizer, PageExporter,
-│              ProtectStep, PdfAStep, PdfRepairer, RedactStep, FormFiller, PdfLoader,
+│              ProtectStep, PdfAStep, PdfRepairer, RedactStep, FormFiller, PdfLoader, OfficeConverter, HtmlConverter,
+│              PdfToOffice, OfficeRunner, LibreOfficeRunner,
 │              ImageToPageService, ImportService, ExifOrientation
 ├── ui         MainView, PageGrid, PageCard, PreviewPane, Toolbar (menu Ferramentas: Tool, ToolGroup),
 │              DocumentSession, Dialogs
