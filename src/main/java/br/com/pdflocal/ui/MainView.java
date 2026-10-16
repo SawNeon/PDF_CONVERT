@@ -174,6 +174,7 @@ public final class MainView extends BorderPane implements AutoCloseable {
                 new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.export-images", this::exportImages, true),
                 new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.pdfa", this::convertToPdfA, true),
                 new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.pdf-to-word", this::pdfToWord, true),
+                new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.pdf-to-excel", this::pdfToExcel, true),
                 new Tool(ToolGroup.CONVERT_FROM_PDF, "tool.pdf-to-powerpoint", this::pdfToPowerPoint, true),
                 new Tool(ToolGroup.SECURITY, "tool.redact", this::redact, true),
                 new Tool(ToolGroup.SECURITY, "tool.protect", this::protect, true));
@@ -411,6 +412,11 @@ public final class MainView extends BorderPane implements AutoCloseable {
     private void pdfToWord() {
         listConversion("docx", (items, registry, output, listener) ->
                 pdfToOffice.toWord(items, registry, toolbar.pageSize(), output, listener));
+    }
+
+    private void pdfToExcel() {
+        listConversion("xlsx", (items, registry, output, listener) ->
+                pdfToOffice.toExcel(items, registry, toolbar.pageSize(), output, listener));
     }
 
     private void pdfToPowerPoint() {
