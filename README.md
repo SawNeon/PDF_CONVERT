@@ -279,3 +279,8 @@ br.com.pdflocal
 ```
 
 As regras do projeto e o plano de fases estão em `CLAUDE.md` e `docs/PLANO.md`.
+
+## Documentação
+
+- [`docs/FERRAMENTAS.md`](docs/FERRAMENTAS.md): cada ferramenta, onde ela age, como funciona, o que nunca faz e os limites.
+- [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md): o guia do código, com a ideia central, o caminho de uma operação, cada pacote e classe, as threads, a segurança e como acrescentar uma ferramenta.
